@@ -206,6 +206,7 @@ export default function FinanceLedger() {
   const tabs = [
     { id: "dashboard", label: "Dashboard" },
     { id: "transactions", label: "Transactions" },
+    { id: "quotes", label: "Quotes" },
     { id: "invoices", label: "Invoices" },
     { id: "reports", label: "Reports" },
   ];
