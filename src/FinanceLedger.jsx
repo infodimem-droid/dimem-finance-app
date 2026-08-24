@@ -69,6 +69,7 @@ function fmtLongDate(iso) {
 export default function FinanceLedger() {
   const [transactions, setTransactions] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [quotes, setQuotes] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [tab, setTab] = useState("dashboard");
@@ -85,6 +86,7 @@ export default function FinanceLedger() {
         const parsed = JSON.parse(raw);
         setTransactions(parsed.transactions || []);
         setInvoices(parsed.invoices || []);
+        setQuotes(parsed.quotes || []);
       }
     } catch (e) {
       // key likely doesn't exist yet, or was corrupted — that's fine for a first run
@@ -97,12 +99,12 @@ export default function FinanceLedger() {
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices, quotes }));
       setSaveError(null);
     } catch (e) {
       setSaveError("Changes aren't saving. Your data will be lost if you close this.");
     }
-  }, [transactions, invoices, loaded]);
+  }, [transactions, invoices, quotes, loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
@@ -125,8 +127,27 @@ export default function FinanceLedger() {
   function updateInvoiceStatus(id, status) {
     setInvoices(prev => prev.map(i => i.id === id ? { ...i, status } : i));
   }
-  function deleteInvoice(id) {
+    function deleteInvoice(id) {
     setInvoices(prev => prev.filter(i => i.id !== id));
+  }
+  function addQuote(q) {
+    setQuotes(prev => [...prev, { ...q, id: uid() }]);
+  }
+  function updateQuoteStatus(id, status) {
+    setQuotes(prev => prev.map(q => q.id === id ? { ...q, status } : q));
+  }
+  function deleteQuote(id) {
+    setQuotes(prev => prev.filter(q => q.id !== id));
+  }
+  function convertQuoteToInvoice(quote) {
+    addInvoice({
+      client: quote.client,
+      issueDate: todayISO(),
+      dueDate: todayISO(),
+      amount: quote.amount,
+      status: "unpaid",
+    });
+    updateQuoteStatus(quote.id, "converted");
   }
 
   function handleCSVFile(e) {
@@ -230,6 +251,8 @@ export default function FinanceLedger() {
             importError={importError}
             setImportError={setImportError}
           />
+                ) : tab === "quotes" ? (
+          <QuotesTab quotes={quotes} addQuote={addQuote} updateQuoteStatus={updateQuoteStatus} deleteQuote={deleteQuote} convertQuoteToInvoice={convertQuoteToInvoice} onPrint={setPrintTarget} />
         ) : tab === "invoices" ? (
           <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoiceStatus={updateInvoiceStatus} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} />
         ) : (
@@ -285,6 +308,7 @@ function PrintDocument({ target }) {
       {target.type === "monthlyReport" && <MonthlyReportDoc {...target.payload} />}
       {target.type === "annualReport" && <AnnualReportDoc {...target.payload} />}
       {target.type === "invoice" && <InvoiceDoc {...target.payload} />}
+      {target.type === "quote" && <QuoteDoc {...target.payload} />}
       <LetterheadFooter pageLabel={`Generated ${fmtLongDate(todayISO())}`} />
     </div>
   );
@@ -425,7 +449,45 @@ function InvoiceDoc({ invoice }) {
     </div>
   );
 }
-
+function QuoteDoc({ quote }) {
+  return (
+    <div>
+      <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Quotation</div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Prepared for</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{quote.client}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Date: </span><span className="ledger-mono">{quote.issueDate}</span></div>
+          <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Valid until: </span><span className="ledger-mono">{quote.validUntil}</span></div>
+          <div style={{ fontSize: 11, marginTop: 4, fontWeight: 700, color: COLORS.brass, textTransform: "uppercase" }}>{quote.status}</div>
+        </div>
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ borderBottom: `2px solid ${COLORS.ink}` }}>
+            <th style={{ textAlign: "left", padding: "6px" }}>Description</th>
+            <th style={{ textAlign: "right", padding: "6px" }}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ borderBottom: `1px solid ${COLORS.line}` }}>
+            <td style={{ padding: "10px 6px" }}>{quote.description || "Services quoted"}</td>
+            <td style={{ padding: "10px 6px", textAlign: "right" }} className="ledger-mono">{fmtMoney(quote.amount)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }}>Total quoted</td>
+            <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }} className="ledger-mono">{fmtMoney(quote.amount)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div style={{ fontSize: 10, color: COLORS.textMute, marginTop: 14 }}>NOT VAT REGISTERED</div>
+    </div>
+  );
+}
 // ---------- Header & Nav ----------
 function Header({ saveError }) {
   return (
@@ -867,7 +929,124 @@ function InvoicesTab({ invoices, addInvoice, updateInvoiceStatus, deleteInvoice,
     </div>
   );
 }
+// ---------- Quotes Tab ----------
+function QuotesTab({ quotes, addQuote, updateQuoteStatus, deleteQuote, convertQuoteToInvoice, onPrint }) {
+  const [form, setForm] = useState({ client: "", issueDate: todayISO(), validUntil: todayISO(), description: "", amount: "", status: "draft" });
 
+  function submit(e) {
+    e.preventDefault();
+    const amt = parseFloat(form.amount);
+    if (!form.client || isNaN(amt) || amt <= 0) return;
+    addQuote({ ...form, amount: amt });
+    setForm({ client: "", issueDate: todayISO(), validUntil: todayISO(), description: "", amount: "", status: "draft" });
+  }
+
+  const sorted = [...quotes].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
+  const totalOpen = quotes.filter(q => q.status !== "converted" && q.status !== "declined").reduce((s, q) => s + Number(q.amount), 0);
+  const totalConverted = quotes.filter(q => q.status === "converted").reduce((s, q) => s + Number(q.amount), 0);
+
+  const statusColors = {
+    draft: { bg: "#EFE3CB", fg: COLORS.brass },
+    sent: { bg: "#EFE3CB", fg: COLORS.brass },
+    accepted: { bg: COLORS.greenSoft, fg: COLORS.green },
+    declined: { bg: COLORS.rustSoft, fg: COLORS.rust },
+    converted: { bg: COLORS.greenSoft, fg: COLORS.green },
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Card>
+        <SectionTitle>New quote</SectionTitle>
+        <form onSubmit={submit} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+          <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+            <Label>Client</Label>
+            <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={inputStyle} required />
+          </div>
+          <div style={{ width: 150 }}>
+            <Label>Issue date</Label>
+            <input className="ledger-input" type="date" value={form.issueDate} onChange={e => setForm({ ...form, issueDate: e.target.value })} style={inputStyle} required />
+          </div>
+          <div style={{ width: 150 }}>
+            <Label>Valid until</Label>
+            <input className="ledger-input" type="date" value={form.validUntil} onChange={e => setForm({ ...form, validUntil: e.target.value })} style={inputStyle} required />
+          </div>
+          <div style={{ flex: "1 1 200px", minWidth: 160 }}>
+            <Label>Description</Label>
+            <input className="ledger-input" type="text" placeholder="What's being quoted" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={inputStyle} />
+          </div>
+          <div style={{ width: 130 }}>
+            <Label>Amount</Label>
+            <input className="ledger-input" type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} style={inputStyle} required />
+          </div>
+          <Button type="submit">Add quote</Button>
+        </form>
+      </Card>
+
+      <Card>
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+          <StatBlock label="Open quotes" value={fmtMoney(totalOpen)} color={COLORS.brass} />
+          <StatBlock label="Converted to invoices" value={fmtMoney(totalConverted)} color={COLORS.green} />
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>All quotes ({quotes.length})</SectionTitle>
+        {sorted.length === 0 ? (
+          <div style={{ color: COLORS.textMute, fontSize: 13 }}>No quotes yet.</div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="ledger-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr className="ledger-row-line">
+                  {["Client", "Issued", "Valid until", "Amount", "Status", ""].map(h => (
+                    <th key={h} style={{ textAlign: h === "Amount" ? "right" : "left", padding: "6px", color: COLORS.textMute, fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(q => {
+                  const sc = statusColors[q.status] || statusColors.draft;
+                  return (
+                    <tr key={q.id} className="ledger-row-line">
+                      <td style={{ padding: "8px 6px" }}>{q.client}</td>
+                      <td style={{ padding: "8px 6px" }} className="ledger-mono">{q.issueDate}</td>
+                      <td style={{ padding: "8px 6px" }} className="ledger-mono">{q.validUntil}</td>
+                      <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 600 }} className="ledger-mono">{fmtMoney(q.amount)}</td>
+                      <td style={{ padding: "8px 6px" }}>
+                        <select
+                          value={q.status}
+                          onChange={e => updateQuoteStatus(q.id, e.target.value)}
+                          disabled={q.status === "converted"}
+                          style={{
+                            fontSize: 11, fontWeight: 700, padding: "3px 6px", borderRadius: 10, textTransform: "uppercase",
+                            background: sc.bg, color: sc.fg, border: "none",
+                          }}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="sent">Sent</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="declined">Declined</option>
+                          {q.status === "converted" && <option value="converted">Converted</option>}
+                        </select>
+                      </td>
+                      <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button onClick={() => onPrint({ type: "quote", payload: { quote: q } })} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Print</button>
+                        {q.status === "accepted" && (
+                          <button onClick={() => convertQuoteToInvoice(q)} style={{ background: "none", border: "none", color: COLORS.green, cursor: "pointer", fontSize: 12, marginRight: 10, fontWeight: 600 }}>Convert to Invoice</button>
+                        )}
+                        <button onClick={() => deleteQuote(q.id)} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Remove</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
 // ---------- Reports Tab ----------
 function ReportsTab({ transactions, invoices, onPrint }) {
   const years = useMemo(() => {
