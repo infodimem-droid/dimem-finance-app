@@ -60,7 +60,7 @@ function uid() {
 function fmtMoney(n) {
   const v = Number(n) || 0;
   const sign = v < 0 ? "-" : "";
-  return sign + "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return sign + "R" + Math.abs(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function todayISO() {
