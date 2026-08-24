@@ -43,7 +43,14 @@ const COMPANY = {
   address: "431 Voortrekker Road, Maitland, 7405",
   contact: "Contact Gabriel | Tel: +27 (0)72 217 9033",
   web: "dimem.co.za | info.dimem@gmail.com",
-  footerTagline: "Applying technical knowledge to Design, innovation, Manufacture, Erecting & Maintenance",
+    footerTagline: "Applying technical knowledge to Design, innovation, Manufacture, Erecting & Maintenance",
+};
+
+const BANKING_DETAILS = {
+  bank: "FNB",
+  branchCode: "250655",
+  branchName: "V&A Waterfront",
+  accountNumber: "62598546483",
 };
 
 function uid() {
@@ -444,8 +451,17 @@ function InvoiceDoc({ invoice }) {
             <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }}>Total due</td>
             <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }} className="ledger-mono">{fmtMoney(invoice.amount)}</td>
           </tr>
-        </tfoot>
+                </tfoot>
       </table>
+      <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${COLORS.line}`, display: "flex", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ fontSize: 11, color: COLORS.textMute }}>
+          <div style={{ fontWeight: 700, color: COLORS.textMain, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 }}>Banking details</div>
+          <div>Bank: {BANKING_DETAILS.bank}</div>
+          <div>Branch: {BANKING_DETAILS.branchName} ({BANKING_DETAILS.branchCode})</div>
+          <div>Account number: {BANKING_DETAILS.accountNumber}</div>
+        </div>
+        <div style={{ fontSize: 11, color: COLORS.textMute, alignSelf: "flex-end", fontWeight: 700 }}>NOT VAT REGISTERED</div>
+      </div>
     </div>
   );
 }
