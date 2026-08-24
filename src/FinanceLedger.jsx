@@ -77,40 +77,31 @@ export default function FinanceLedger() {
   const [importError, setImportError] = useState(null);
   const [printTarget, setPrintTarget] = useState(null);
 
-  // Load persisted data
+    // Load persisted data
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get(STORAGE_KEY, false);
-        if (result && result.value) {
-          const parsed = JSON.parse(result.value);
-          setTransactions(parsed.transactions || []);
-          setInvoices(parsed.invoices || []);
-        }
-      } catch (e) {
-        // key likely doesn't exist yet — that's fine for a first run
-      } finally {
-        setLoaded(true);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setTransactions(parsed.transactions || []);
+        setInvoices(parsed.invoices || []);
       }
-    })();
+    } catch (e) {
+      // key likely doesn't exist yet, or was corrupted — that's fine for a first run
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   // Persist on change (after initial load)
   useEffect(() => {
     if (!loaded) return;
-    (async () => {
-      try {
-        const result = await window.storage.set(
-          STORAGE_KEY,
-          JSON.stringify({ transactions, invoices }),
-          false
-        );
-        if (!result) setSaveError("Changes aren't saving. Your data will be lost if you close this.");
-        else setSaveError(null);
-      } catch (e) {
-        setSaveError("Changes aren't saving. Your data will be lost if you close this.");
-      }
-    })();
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices }));
+      setSaveError(null);
+    } catch (e) {
+      setSaveError("Changes aren't saving. Your data will be lost if you close this.");
+    }
   }, [transactions, invoices, loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
