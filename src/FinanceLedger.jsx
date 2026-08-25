@@ -252,7 +252,7 @@ export default function FinanceLedger() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 20px 60px" }}>
         {!loaded ? (
-          <div className="ledger-serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{editingId ? "Edit invoice" : "New invoice"}</div>
+          <div className="ledger-serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>New invoice</div>
         ) : tab === "dashboard" ? (
           <Dashboard transactions={transactions} invoices={invoices} />
         ) : tab === "transactions" ? (
@@ -919,15 +919,21 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
 
-  function submit(e) {
-    e.preventDefault();
-    const amt = computeItemsTotal(items);
-    if (!form.client || amt <= 0) return;
-    if (editingId) {
-      updateInvoice(editingId, { ...form, items, amount: amt });
-      setEditingId(null);
-    } else {
-      addInvoice({ ...form, items, amount: amt });
+// ---------- Invoices Tab ----------
+function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint }) {
+    const [form, setForm] = useState({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
+  const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  const [editingId, setEditingId] = useState(null);
+
+  function startEdit(inv) {
+    setEditingId(inv.id);
+    setForm({ client: inv.client, issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
+    setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
+    setItems([{ id: uid(), ice({ ...form, items, amount: amt });
     }
     setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
