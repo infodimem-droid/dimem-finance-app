@@ -440,26 +440,7 @@ function InvoiceDoc({ invoice }) {
           </div>
         </div>
       </div>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ borderBottom: `2px solid ${COLORS.ink}` }}>
-            <th style={{ textAlign: "left", padding: "6px" }}>Description</th>
-            <th style={{ textAlign: "right", padding: "6px" }}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={{ borderBottom: `1px solid ${COLORS.line}` }}>
-            <td style={{ padding: "10px 6px" }}>Services rendered</td>
-            <td style={{ padding: "10px 6px", textAlign: "right" }} className="ledger-mono">{fmtMoney(invoice.amount)}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr>
-            <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }}>Total due</td>
-            <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }} className="ledger-mono">{fmtMoney(invoice.amount)}</td>
-          </tr>
-                </tfoot>
-      </table>
+            <ItemsTable items={invoice.items} fallbackAmount={invoice.amount} fallbackLabel="Services rendered" totalLabel="Total due" />
       <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${COLORS.line}`, display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div style={{ fontSize: 11, color: COLORS.textMute }}>
           <div style={{ fontWeight: 700, color: COLORS.textMain, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 }}>Banking details</div>
@@ -487,7 +468,7 @@ function QuoteDoc({ quote }) {
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: 700, color: COLORS.brass, textTransform: "uppercase" }}>{quote.status}</div>
         </div>
       </div>
-            <ItemsTable items={invoice.items} fallbackAmount={invoice.amount} fallbackLabel="Services rendered" totalLabel="Total due" />
+            <ItemsTable items={quote.items} fallbackAmount={quote.amount} fallbackLabel="Services quoted" totalLabel="Total quoted" />
       <div style={{ fontSize: 10, color: COLORS.textMute, marginTop: 14 }}>NOT VAT REGISTERED</div>
     </div>
   );
