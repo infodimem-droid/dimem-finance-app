@@ -129,9 +129,12 @@ export default function FinanceLedger() {
   }
   function deleteTransaction(id) {
     setTransactions(prev => prev.filter(t => t.id !== id));
-  }
+  }  
   function addInvoice(inv) {
     setInvoices(prev => [...prev, { ...inv, id: uid() }]);
+  }
+  function updateInvoice(id, data) {
+    setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...data } : i));
   }
   function updateInvoiceStatus(id, status) {
     setInvoices(prev => prev.map(i => i.id === id ? { ...i, status } : i));
@@ -141,6 +144,9 @@ export default function FinanceLedger() {
   }
   function addQuote(q) {
     setQuotes(prev => [...prev, { ...q, id: uid() }]);
+  }
+  function updateQuote(id, data) {
+    setQuotes(prev => prev.map(q => q.id === id ? { ...q, ...data } : q));
   }
   function updateQuoteStatus(id, status) {
     setQuotes(prev => prev.map(q => q.id === id ? { ...q, status } : q));
@@ -246,7 +252,7 @@ export default function FinanceLedger() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 20px 60px" }}>
         {!loaded ? (
-          <div className="ledger-mono" style={{ color: COLORS.textMute, padding: 40, textAlign: "center" }}>Opening the books…</div>
+          <div className="ledger-serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{editingId ? "Edit invoice" : "New invoice"}</div>
         ) : tab === "dashboard" ? (
           <Dashboard transactions={transactions} invoices={invoices} />
         ) : tab === "transactions" ? (
@@ -263,9 +269,9 @@ export default function FinanceLedger() {
             setImportError={setImportError}
           />
                 ) : tab === "quotes" ? (
-          <QuotesTab quotes={quotes} addQuote={addQuote} updateQuoteStatus={updateQuoteStatus} deleteQuote={deleteQuote} convertQuoteToInvoice={convertQuoteToInvoice} onPrint={setPrintTarget} />
+          <QuotesTab quotes={quotes} addQuote={addQuote} updateQuote={updateQuote} updateQuoteStatus={updateQuoteStatus} deleteQuote={deleteQuote} convertQuoteToInvoice={convertQuoteToInvoice} onPrint={setPrintTarget} />
         ) : tab === "invoices" ? (
-          <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoiceStatus={updateInvoiceStatus} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} />
+          <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoice={updateInvoice} updateInvoiceStatus={updateInvoiceStatus} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} />
         ) : (
           <ReportsTab transactions={transactions} invoices={invoices} onPrint={setPrintTarget} />
         )}
@@ -897,15 +903,32 @@ function Label({ children }) {
 }
 
 // ---------- Invoices Tab ----------
-function InvoicesTab({ invoices, addInvoice, updateInvoiceStatus, deleteInvoice, onPrint }) {
+function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint }) {
     const [form, setForm] = useState({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  const [editingId, setEditingId] = useState(null);
+
+  function startEdit(inv) {
+    setEditingId(inv.id);
+    setForm({ client: inv.client, issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
+    setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
+    setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  }
 
   function submit(e) {
     e.preventDefault();
     const amt = computeItemsTotal(items);
     if (!form.client || amt <= 0) return;
-    addInvoice({ ...form, items, amount: amt });
+    if (editingId) {
+      updateInvoice(editingId, { ...form, items, amount: amt });
+      setEditingId(null);
+    } else {
+      addInvoice({ ...form, items, amount: amt });
+    }
     setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
@@ -935,7 +958,10 @@ function InvoicesTab({ invoices, addInvoice, updateInvoiceStatus, deleteInvoice,
             </div>
           </div>
           <LineItemsEditor items={items} setItems={setItems} />
-          <div><Button type="submit">Add invoice</Button></div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Button type="submit">{editingId ? "Update invoice" : "Add invoice"}</Button>
+            {editingId && <button type="button" onClick={cancelEdit} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Cancel edit</button>}
+          </div>
         </form>
       </Card>
 
@@ -980,7 +1006,7 @@ function InvoicesTab({ invoices, addInvoice, updateInvoiceStatus, deleteInvoice,
                       </td>
                       <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
                         <button onClick={() => onPrint({ type: "invoice", payload: { invoice: i } })} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Print</button>
-                        {i.status !== "paid" && (
+                        <button onClick={() => startEdit(i)} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Edit</button>
                           <button onClick={() => updateInvoiceStatus(i.id, "paid")} style={{ background: "none", border: "none", color: COLORS.green, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Mark paid</button>
                         )}
                         <button onClick={() => deleteInvoice(i.id)} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Remove</button>
@@ -997,15 +1023,32 @@ function InvoicesTab({ invoices, addInvoice, updateInvoiceStatus, deleteInvoice,
   );
 }
 // ---------- Quotes Tab ----------
-function QuotesTab({ quotes, addQuote, updateQuoteStatus, deleteQuote, convertQuoteToInvoice, onPrint }) {
+function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuote, convertQuoteToInvoice, onPrint }) {
   const [form, setForm] = useState({ client: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  const [editingId, setEditingId] = useState(null);
+
+  function startEdit(q) {
+    setEditingId(q.id);
+    setForm({ client: q.client, issueDate: q.issueDate, validUntil: q.validUntil, status: q.status });
+    setItems(q.items && q.items.length > 0 ? q.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setForm({ client: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
+    setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+  }
 
   function submit(e) {
     e.preventDefault();
     const amt = computeItemsTotal(items);
     if (!form.client || amt <= 0) return;
-    addQuote({ ...form, items, amount: amt });
+    if (editingId) {
+      updateQuote(editingId, { ...form, items, amount: amt });
+      setEditingId(null);
+    } else {
+      addQuote({ ...form, items, amount: amt });
+    }
     setForm({ client: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
@@ -1024,7 +1067,7 @@ function QuotesTab({ quotes, addQuote, updateQuoteStatus, deleteQuote, convertQu
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Card>
-        <SectionTitle>New quote</SectionTitle>
+        <SectionTitle>{editingId ? "Edit quote" : "New quote"}</SectionTitle>
                 <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
@@ -1041,7 +1084,10 @@ function QuotesTab({ quotes, addQuote, updateQuoteStatus, deleteQuote, convertQu
             </div>
           </div>
           <LineItemsEditor items={items} setItems={setItems} />
-          <div><Button type="submit">Add quote</Button></div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <Button type="submit">{editingId ? "Update quote" : "Add quote"}</Button>
+            {editingId && <button type="button" onClick={cancelEdit} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Cancel edit</button>}
+          </div>
         </form>
       </Card>
 
@@ -1094,6 +1140,7 @@ function QuotesTab({ quotes, addQuote, updateQuoteStatus, deleteQuote, convertQu
                       </td>
                       <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
                         <button onClick={() => onPrint({ type: "quote", payload: { quote: q } })} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Print</button>
+                        <button onClick={() => startEdit(q)} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Edit</button>
                         {q.status === "accepted" && (
                           <button onClick={() => convertQuoteToInvoice(q)} style={{ background: "none", border: "none", color: COLORS.green, cursor: "pointer", fontSize: 12, marginRight: 10, fontWeight: 600 }}>Convert to Invoice</button>
                         )}
