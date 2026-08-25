@@ -913,32 +913,24 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
     setForm({ client: inv.client, issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
     setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
-  function cancelEdit() {
+   function cancelEdit() {
     setEditingId(null);
     setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
-
-// ---------- Invoices Tab ----------
-function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint }) {
-    const [form, setForm] = useState({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
-  const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
-  const [editingId, setEditingId] = useState(null);
-
-  function startEdit(inv) {
-    setEditingId(inv.id);
-    setForm({ client: inv.client, issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
-    setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
-  }
-  function cancelEdit() {
-    setEditingId(null);
-    setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
-    setItems([{ id: uid(), ice({ ...form, items, amount: amt });
+  function submit(e) {
+    e.preventDefault();
+    const amt = computeItemsTotal(items);
+    if (!form.client || amt <= 0) return;
+    if (editingId) {
+      updateInvoice(editingId, { ...form, items, amount: amt });
+      setEditingId(null);
+    } else {
+      addInvoice({ ...form, items, amount: amt });
     }
     setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
-
   const now = new Date();
   const sorted = [...invoices].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
   const totalOutstanding = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
@@ -947,7 +939,7 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Card>
-        <SectionTitle>New invoice</SectionTitle>
+        <SectionTitle>{editingId ? "Edit invoice" : "New invoice"}</SectionTitle>
                 <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
@@ -1013,7 +1005,8 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
                       <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
                         <button onClick={() => onPrint({ type: "invoice", payload: { invoice: i } })} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Print</button>
                         <button onClick={() => startEdit(i)} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Edit</button>
-                          <button onClick={() => updateInvoiceStatus(i.id, "paid")} style={{ background: "none", border: "none", color: COLORS.green, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Mark paid</button>
+                        {i.status !== "paid" && (
+                        <button onClick={() => updateInvoiceStatus(i.id, "paid")} style={{ background: "none", border: "none", color: COLORS.green, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Mark paid</button>
                         )}
                         <button onClick={() => deleteInvoice(i.id)} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Remove</button>
                       </td>
