@@ -437,6 +437,7 @@ function InvoiceDoc({ invoice }) {
         <div>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Billed to</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{invoice.client}</div>
+          {invoice.project && <div style={{ fontSize: 11, color: COLORS.textMute, marginTop: 2 }}>{invoice.project}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Issued: </span><span className="ledger-mono">{invoice.issueDate}</span></div>
@@ -467,6 +468,7 @@ function QuoteDoc({ quote }) {
         <div>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Prepared for</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{quote.client}</div>
+          {quote.project && <div style={{ fontSize: 11, color: COLORS.textMute, marginTop: 2 }}>{quote.project}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Date: </span><span className="ledger-mono">{quote.issueDate}</span></div>
@@ -904,18 +906,18 @@ function Label({ children }) {
 
 // ---------- Invoices Tab ----------
 function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint }) {
-    const [form, setForm] = useState({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
+  const [form, setForm] = useState({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   const [editingId, setEditingId] = useState(null);
 
   function startEdit(inv) {
     setEditingId(inv.id);
-    setForm({ client: inv.client, issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
+    setForm({ client: inv.client, project: inv.project || "", issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
     setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
    function cancelEdit() {
     setEditingId(null);
-    setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
+    setForm({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
   function submit(e) {
@@ -928,7 +930,7 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
     } else {
       addInvoice({ ...form, items, amount: amt });
     }
-    setForm({ client: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
+    setForm({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
   const now = new Date();
@@ -979,7 +981,7 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
             <table className="ledger-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr className="ledger-row-line">
-                  {["Client", "Issued", "Due", "Amount", "Status", ""].map(h => (
+                  {["Client", "Project", "Issued", "Due", "Amount", "Status", ""].map(h => (
                     <th key={h} style={{ textAlign: h === "Amount" ? "right" : "left", padding: "6px", color: COLORS.textMute, fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>
                   ))}
                 </tr>
@@ -990,6 +992,7 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
                   return (
                     <tr key={i.id} className="ledger-row-line">
                       <td style={{ padding: "8px 6px" }}>{i.client}</td>
+                      <td style={{ padding: "8px 6px" }}>{i.project || "—"}</td>
                       <td style={{ padding: "8px 6px" }} className="ledger-mono">{i.issueDate}</td>
                       <td style={{ padding: "8px 6px" }} className="ledger-mono">{i.dueDate}</td>
                       <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 600 }} className="ledger-mono">{fmtMoney(i.amount)}</td>
@@ -1023,13 +1026,13 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
 }
 // ---------- Quotes Tab ----------
 function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuote, convertQuoteToInvoice, onPrint }) {
-  const [form, setForm] = useState({ client: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
+  const [form, setForm] = useState({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   const [editingId, setEditingId] = useState(null);
 
   function startEdit(q) {
     setEditingId(q.id);
-    setForm({ client: q.client, issueDate: q.issueDate, validUntil: q.validUntil, status: q.status });
+    setForm({ client: q.client, project: q.project || "", issueDate: q.issueDate, validUntil: q.validUntil, status: q.status });
     setItems(q.items && q.items.length > 0 ? q.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
   function cancelEdit() {
@@ -1048,7 +1051,7 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
     } else {
       addQuote({ ...form, items, amount: amt });
     }
-    setForm({ client: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
+    setForm({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
   }
   const sorted = [...quotes].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
@@ -1072,6 +1075,14 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
               <Label>Client</Label>
               <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={inputStyle} required />
+            </div>
+            <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+              <Label>Client</Label>
+              <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={inputStyle} required />
+            </div>
+            <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+              <Label>Project / Reference</Label>
+              <input className="ledger-input" type="text" value={form.project} onChange={e => setForm({ ...form, project: e.target.value })} style={inputStyle} />
             </div>
             <div style={{ width: 150 }}>
               <Label>Issue date</Label>
@@ -1106,7 +1117,7 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
             <table className="ledger-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr className="ledger-row-line">
-                  {["Client", "Issued", "Valid until", "Amount", "Status", ""].map(h => (
+                  {["Client", "Project", "Issued", "Valid until", "Amount", "Status", ""].map(h => (
                     <th key={h} style={{ textAlign: h === "Amount" ? "right" : "left", padding: "6px", color: COLORS.textMute, fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>
                   ))}
                 </tr>
@@ -1117,6 +1128,7 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
                   return (
                     <tr key={q.id} className="ledger-row-line">
                       <td style={{ padding: "8px 6px" }}>{q.client}</td>
+                      <td style={{ padding: "8px 6px" }}>{q.project || "—"}</td>
                       <td style={{ padding: "8px 6px" }} className="ledger-mono">{q.issueDate}</td>
                       <td style={{ padding: "8px 6px" }} className="ledger-mono">{q.validUntil}</td>
                       <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 600 }} className="ledger-mono">{fmtMoney(q.amount)}</td>
