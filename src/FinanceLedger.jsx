@@ -79,6 +79,7 @@ export default function FinanceLedger() {
   const [transactions, setTransactions] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [tab, setTab] = useState("dashboard");
@@ -96,6 +97,7 @@ export default function FinanceLedger() {
         setTransactions(parsed.transactions || []);
         setInvoices(parsed.invoices || []);
         setQuotes(parsed.quotes || []);
+        setClients(parsed.clients || []);
       }
     } catch (e) {
       // key likely doesn't exist yet, or was corrupted — that's fine for a first run
@@ -108,12 +110,12 @@ export default function FinanceLedger() {
   useEffect(() => {
     if (!loaded) return;
     try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices, quotes }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices, quotes, clients }));
       setSaveError(null);
     } catch (e) {
       setSaveError("Changes aren't saving. Your data will be lost if you close this.");
     }
-  }, [transactions, invoices, quotes, loaded]);
+  }, [transactions, invoices, quotes, clients, loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
@@ -127,11 +129,37 @@ export default function FinanceLedger() {
   function addTransaction(t) {
     setTransactions(prev => [...prev, { ...t, id: uid() }]);
   }
+  function addClient(name) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setClients(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
+  }
+  function generateReference(prefix, existingRecords) {
+    const today = new Date();
+    const yy = String(today.getFullYear()).slice(-2);
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    const todayPrefix = `${prefix}${yy}${mm}${dd}/`;
+    const todayRefs = existingRecords.map(r => r.reference).filter(ref => ref && ref.startsWith(todayPrefix));
+    let letterIdx = 0, number = 1;
+    if (todayRefs.length > 0) {
+      let maxLetterIdx = 0, maxNumber = 0;
+      todayRefs.forEach(ref => {
+        const suffix = ref.slice(todayPrefix.length);
+        const idx = suffix.charCodeAt(0) - 65;
+        const num = parseInt(suffix.slice(1), 10) || 0;
+        if (idx > maxLetterIdx || (idx === maxLetterIdx && num > maxNumber)) { maxLetterIdx = idx; maxNumber = num; }
+      });
+      if (maxNumber >= 9) { letterIdx = maxLetterIdx + 1; number = 1; } else { letterIdx = maxLetterIdx; number = maxNumber + 1; }
+    }
+    return `${todayPrefix}${String.fromCharCode(65 + letterIdx)}${number}`;
+  }
   function deleteTransaction(id) {
     setTransactions(prev => prev.filter(t => t.id !== id));
   }  
   function addInvoice(inv) {
-    setInvoices(prev => [...prev, { ...inv, id: uid() }]);
+    const reference = generateReference("INV", invoices);
+    setInvoices(prev => [...prev, { ...inv, id: uid(), reference }]);
   }
   function updateInvoice(id, data) {
     setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...data } : i));
@@ -143,7 +171,8 @@ export default function FinanceLedger() {
     setInvoices(prev => prev.filter(i => i.id !== id));
   }
   function addQuote(q) {
-    setQuotes(prev => [...prev, { ...q, id: uid() }]);
+    const reference = generateReference("SQ", quotes);
+    setQuotes(prev => [...prev, { ...q, id: uid(), reference }]);
   }
   function updateQuote(id, data) {
     setQuotes(prev => prev.map(q => q.id === id ? { ...q, ...data } : q));
@@ -269,9 +298,9 @@ export default function FinanceLedger() {
             setImportError={setImportError}
           />
                 ) : tab === "quotes" ? (
-          <QuotesTab quotes={quotes} addQuote={addQuote} updateQuote={updateQuote} updateQuoteStatus={updateQuoteStatus} deleteQuote={deleteQuote} convertQuoteToInvoice={convertQuoteToInvoice} onPrint={setPrintTarget} />
+          <QuotesTab quotes={quotes} addQuote={addQuote} updateQuote={updateQuote} updateQuoteStatus={updateQuoteStatus} deleteQuote={deleteQuote} convertQuoteToInvoice={convertQuoteToInvoice} onPrint={setPrintTarget} clients={clients} addClient={addClient} />
         ) : tab === "invoices" ? (
-          <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoice={updateInvoice} updateInvoiceStatus={updateInvoiceStatus} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} />
+          <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoice={updateInvoice} updateInvoiceStatus={updateInvoiceStatus} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} clients={clients} addClient={addClient} />
         ) : (
           <ReportsTab transactions={transactions} invoices={invoices} onPrint={setPrintTarget} />
         )}
@@ -434,14 +463,15 @@ function InvoiceDoc({ invoice }) {
     <div>
       <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Invoice</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
+         <div>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Billed to</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{invoice.client}</div>
-          {invoice.project && <div style={{ fontSize: 11, color: COLORS.textMute, marginTop: 2 }}>{invoice.project}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
+          {invoice.reference && <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{invoice.reference}</div>}
           <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Issued: </span><span className="ledger-mono">{invoice.issueDate}</span></div>
-          <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Due: </span><span className="ledger-mono">{invoice.dueDate}</span></div>
+          {invoice.project && <div style={{ fontSize: 12, fontWeight: 700, marginTop: 3 }}>{invoice.project}</div>}
+          <div style={{ fontSize: 11, marginTop: 3 }}><span style={{ color: COLORS.textMute }}>Due: </span><span className="ledger-mono">{invoice.dueDate}</span></div>
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: 700, color: invoice.status === "paid" ? COLORS.green : isOverdue ? COLORS.rust : COLORS.brass, textTransform: "uppercase" }}>
             {invoice.status === "paid" ? "Paid" : isOverdue ? "Overdue" : "Unpaid"}
           </div>
@@ -468,11 +498,12 @@ function QuoteDoc({ quote }) {
         <div>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Prepared for</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{quote.client}</div>
-          {quote.project && <div style={{ fontSize: 11, color: COLORS.textMute, marginTop: 2 }}>{quote.project}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
+          {quote.reference && <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{quote.reference}</div>}
           <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Date: </span><span className="ledger-mono">{quote.issueDate}</span></div>
-          <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Valid until: </span><span className="ledger-mono">{quote.validUntil}</span></div>
+          {quote.project && <div style={{ fontSize: 12, fontWeight: 700, marginTop: 3 }}>{quote.project}</div>}
+          <div style={{ fontSize: 11, marginTop: 3 }}><span style={{ color: COLORS.textMute }}>Valid until: </span><span className="ledger-mono">{quote.validUntil}</span></div>
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: 700, color: COLORS.brass, textTransform: "uppercase" }}>{quote.status}</div>
         </div>
       </div>
