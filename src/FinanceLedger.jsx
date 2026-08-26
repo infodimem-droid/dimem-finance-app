@@ -461,14 +461,14 @@ function InvoiceDoc({ invoice }) {
   const isOverdue = invoice.status !== "paid" && new Date(invoice.dueDate) < new Date();
   return (
     <div>
-      <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Invoice</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
          <div>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Billed to</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{invoice.client}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          {invoice.reference && <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{invoice.reference}</div>}
+          <div className="ledger-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Invoice</div>
+          {invoice.reference && <div className="ledger-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{invoice.reference}</div>}
           <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Issued: </span><span className="ledger-mono">{invoice.issueDate}</span></div>
           {invoice.project && <div style={{ fontSize: 12, fontWeight: 700, marginTop: 3 }}>{invoice.project}</div>}
           <div style={{ fontSize: 11, marginTop: 3 }}><span style={{ color: COLORS.textMute }}>Due: </span><span className="ledger-mono">{invoice.dueDate}</span></div>
@@ -485,7 +485,7 @@ function InvoiceDoc({ invoice }) {
           <div>Branch: {BANKING_DETAILS.branchName} ({BANKING_DETAILS.branchCode})</div>
           <div>Account number: {BANKING_DETAILS.accountNumber}</div>
         </div>
-        <div style={{ fontSize: 11, color: COLORS.textMute, alignSelf: "flex-end", fontWeight: 700 }}>NOT VAT REGISTERED</div>
+        <div style={{ fontSize: 9, color: COLORS.textMute, alignSelf: "flex-end", textAlign: "right", maxWidth: 260 }}>Note: All work shall be processed and executed in accordance with attached DiMEM (Pty) Ltd's Standard Terms and Conditions.</div>
       </div>
     </div>
   );
@@ -493,14 +493,14 @@ function InvoiceDoc({ invoice }) {
 function QuoteDoc({ quote }) {
   return (
     <div>
-      <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Quotation</div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Prepared for</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{quote.client}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          {quote.reference && <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{quote.reference}</div>}
+          <div className="ledger-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Quotation</div>
+          {quote.reference && <div className="ledger-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{quote.reference}</div>}
           <div style={{ fontSize: 11 }}><span style={{ color: COLORS.textMute }}>Date: </span><span className="ledger-mono">{quote.issueDate}</span></div>
           {quote.project && <div style={{ fontSize: 12, fontWeight: 700, marginTop: 3 }}>{quote.project}</div>}
           <div style={{ fontSize: 11, marginTop: 3 }}><span style={{ color: COLORS.textMute }}>Valid until: </span><span className="ledger-mono">{quote.validUntil}</span></div>
@@ -508,7 +508,7 @@ function QuoteDoc({ quote }) {
         </div>
       </div>
             <ItemsTable items={quote.items} fallbackAmount={quote.amount} fallbackLabel="Services quoted" totalLabel="Total quoted" />
-      <div style={{ fontSize: 10, color: COLORS.textMute, marginTop: 14 }}>NOT VAT REGISTERED</div>
+        <div style={{ fontSize: 9, color: COLORS.textMute, marginTop: 14 }}>Note: All work shall be processed and executed in accordance with attached DiMEM (Pty) Ltd's Standard Terms and Conditions.</div>
     </div>
   );
 }
