@@ -120,10 +120,17 @@ export default function FinanceLedger() {
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
     if (!printTarget) return;
+    const originalTitle = document.title;
+    const record = printTarget.payload && (printTarget.payload.invoice || printTarget.payload.quote);
+    if (record) {
+      const clientName = (record.clientInfo && record.clientInfo.name) || record.client || "Document";
+      const ref = record.reference || "";
+      document.title = ref ? `${clientName} - ${ref}` : clientName;
+    }
     const t = setTimeout(() => window.print(), 80);
-    const handleAfterPrint = () => setPrintTarget(null);
+    const handleAfterPrint = () => { setPrintTarget(null); document.title = originalTitle; };
     window.addEventListener("afterprint", handleAfterPrint);
-    return () => { clearTimeout(t); window.removeEventListener("afterprint", handleAfterPrint); };
+    return () => { clearTimeout(t); window.removeEventListener("afterprint", handleAfterPrint); document.title = originalTitle; };
   }, [printTarget]);
 
   function addTransaction(t) {
@@ -193,6 +200,8 @@ export default function FinanceLedger() {
   function convertQuoteToInvoice(quote) {
     addInvoice({
       client: quote.client,
+      clientInfo: quote.clientInfo,
+      project: quote.project,
       issueDate: todayISO(),
       dueDate: todayISO(),
       items: quote.items,
