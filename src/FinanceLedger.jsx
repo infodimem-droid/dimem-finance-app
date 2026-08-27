@@ -936,25 +936,29 @@ function Label({ children }) {
 }
 
 // ---------- Invoices Tab ----------
-function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint }) {
+function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint, clients, addClient }) {
   const [form, setForm] = useState({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
-  const [editingId, setEditingId] = useState(null);
+    const [editingId, setEditingId] = useState(null);
+    const [showNewClient, setShowNewClient] = useState(false);
 
   function startEdit(inv) {
     setEditingId(inv.id);
     setForm({ client: inv.client, project: inv.project || "", issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
     setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+    setShowNewClient(!clients.includes(inv.client));
   }
    function cancelEdit() {
     setEditingId(null);
     setForm({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+    setShowNewClient(false);
   }
   function submit(e) {
     e.preventDefault();
     const amt = computeItemsTotal(items);
     if (!form.client || amt <= 0) return;
+    addClient(form.client);
     if (editingId) {
       updateInvoice(editingId, { ...form, items, amount: amt });
       setEditingId(null);
@@ -963,6 +967,7 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
     }
     setForm({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+    setShowNewClient(false);
   }
   const now = new Date();
   const sorted = [...invoices].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
@@ -975,9 +980,27 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
         <SectionTitle>{editingId ? "Edit invoice" : "New invoice"}</SectionTitle>
                 <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-            <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
               <Label>Client</Label>
-              <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={inputStyle} required />
+              {showNewClient ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={{ ...inputStyle, flex: 1 }} placeholder="New client name" required autoFocus />
+                  {clients.length > 0 && <button type="button" onClick={() => { setShowNewClient(false); setForm({ ...form, client: "" }); }} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>Choose existing</button>}
+                </div>
+              ) : (
+                <select className="ledger-input" value={form.client} onChange={e => {
+                  if (e.target.value === "__new__") { setShowNewClient(true); setForm({ ...form, client: "" }); }
+                  else { setForm({ ...form, client: e.target.value }); }
+                }} style={inputStyle} required>
+                  <option value="" disabled>Select client</option>
+                  <option value="__new__">+ New client</option>
+                  {clients.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
+            </div>
+            <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+              <Label>Project / Reference</Label>
+              <input className="ledger-input" type="text" value={form.project} onChange={e => setForm({ ...form, project: e.target.value })} style={inputStyle} />
             </div>
             <div style={{ width: 150 }}>
               <Label>Issue date</Label>
@@ -1056,26 +1079,30 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
   );
 }
 // ---------- Quotes Tab ----------
-function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuote, convertQuoteToInvoice, onPrint }) {
+function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuote, convertQuoteToInvoice, onPrint, clients, addClient }) {
   const [form, setForm] = useState({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
-  const [editingId, setEditingId] = useState(null);
+    const [editingId, setEditingId] = useState(null);
+    const [showNewClient, setShowNewClient] = useState(false);
 
   function startEdit(q) {
     setEditingId(q.id);
     setForm({ client: q.client, project: q.project || "", issueDate: q.issueDate, validUntil: q.validUntil, status: q.status });
     setItems(q.items && q.items.length > 0 ? q.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+    setShowNewClient(!clients.includes(q.client));
   }
   function cancelEdit() {
     setEditingId(null);
-    setForm({ client: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
+    setForm({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+    setShowNewClient(false);
   }
 
   function submit(e) {
     e.preventDefault();
     const amt = computeItemsTotal(items);
     if (!form.client || amt <= 0) return;
+    addClient(form.client);
     if (editingId) {
       updateQuote(editingId, { ...form, items, amount: amt });
       setEditingId(null);
@@ -1084,6 +1111,7 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
     }
     setForm({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
+    setShowNewClient(false);
   }
   const sorted = [...quotes].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
   const totalOpen = quotes.filter(q => q.status !== "converted" && q.status !== "declined").reduce((s, q) => s + Number(q.amount), 0);
@@ -1103,13 +1131,23 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
         <SectionTitle>{editingId ? "Edit quote" : "New quote"}</SectionTitle>
                 <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-            <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
               <Label>Client</Label>
-              <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={inputStyle} required />
-            </div>
-            <div style={{ flex: "1 1 180px", minWidth: 150 }}>
-              <Label>Client</Label>
-              <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={inputStyle} required />
+              {showNewClient ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={{ ...inputStyle, flex: 1 }} placeholder="New client name" required autoFocus />
+                  {clients.length > 0 && <button type="button" onClick={() => { setShowNewClient(false); setForm({ ...form, client: "" }); }} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>Choose existing</button>}
+                </div>
+              ) : (
+                <select className="ledger-input" value={form.client} onChange={e => {
+                  if (e.target.value === "__new__") { setShowNewClient(true); setForm({ ...form, client: "" }); }
+                  else { setForm({ ...form, client: e.target.value }); }
+                }} style={inputStyle} required>
+                  <option value="" disabled>Select client</option>
+                  <option value="__new__">+ New client</option>
+                  {clients.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              )}
             </div>
             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
               <Label>Project / Reference</Label>
