@@ -97,7 +97,7 @@ export default function FinanceLedger() {
         setTransactions(parsed.transactions || []);
         setInvoices(parsed.invoices || []);
         setQuotes(parsed.quotes || []);
-        setClients(parsed.clients || []);
+        setClients((parsed.clients || []).map(c => typeof c === "string" ? { name: c } : c));
       }
     } catch (e) {
       // key likely doesn't exist yet, or was corrupted — that's fine for a first run
@@ -129,10 +129,17 @@ export default function FinanceLedger() {
   function addTransaction(t) {
     setTransactions(prev => [...prev, { ...t, id: uid() }]);
   }
-  function addClient(name) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    setClients(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
+  function addClient(clientObj) {
+    const name = (clientObj.name || "").trim();
+    if (!name) return;
+    const cleaned = { name, reg: clientObj.reg || "", vat: clientObj.vat || "", address: clientObj.address || "", contact: clientObj.contact || "", phone: clientObj.phone || "", email: clientObj.email || "" };
+    setClients(prev => {
+      const idx = prev.findIndex(c => c.name === name);
+      if (idx === -1) return [...prev, cleaned];
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], ...cleaned };
+      return updated;
+    });
   }
   function generateReference(prefix, existingRecords) {
     const today = new Date();
@@ -459,12 +466,19 @@ function AnnualReportDoc({ year, transactions, monthlyData }) {
 
 function InvoiceDoc({ invoice }) {
   const isOverdue = invoice.status !== "paid" && new Date(invoice.dueDate) < new Date();
+  const ciI = invoice.clientInfo || { name: invoice.client };
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-         <div>
+         <div style={{ maxWidth: "48%" }}>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Billed to</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{invoice.client}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{ciI.name}</div>
+          {ciI.reg && <div style={{ fontSize: 10, color: COLORS.textMute, marginTop: 2 }}>Reg: {ciI.reg}</div>}
+          {ciI.vat && <div style={{ fontSize: 10, color: COLORS.textMute }}>VAT: {ciI.vat}</div>}
+          {ciI.address && <div style={{ fontSize: 10, color: COLORS.textMute }}>{ciI.address}</div>}
+          {ciI.contact && <div style={{ fontSize: 10, color: COLORS.textMute }}>Contact: {ciI.contact}</div>}
+          {ciI.phone && <div style={{ fontSize: 10, color: COLORS.textMute }}>Tel: {ciI.phone}</div>}
+          {ciI.email && <div style={{ fontSize: 10, color: COLORS.textMute }}>{ciI.email}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="ledger-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Invoice</div>
@@ -491,12 +505,19 @@ function InvoiceDoc({ invoice }) {
   );
 }
 function QuoteDoc({ quote }) {
+  const ciQ = quote.clientInfo || { name: quote.client };
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
+        <div style={{ maxWidth: "48%" }}>
           <div style={{ fontSize: 10, color: COLORS.textMute, textTransform: "uppercase" }}>Prepared for</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{quote.client}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{ciQ.name}</div>
+          {ciQ.reg && <div style={{ fontSize: 10, color: COLORS.textMute, marginTop: 2 }}>Reg: {ciQ.reg}</div>}
+          {ciQ.vat && <div style={{ fontSize: 10, color: COLORS.textMute }}>VAT: {ciQ.vat}</div>}
+          {ciQ.address && <div style={{ fontSize: 10, color: COLORS.textMute }}>{ciQ.address}</div>}
+          {ciQ.contact && <div style={{ fontSize: 10, color: COLORS.textMute }}>Contact: {ciQ.contact}</div>}
+          {ciQ.phone && <div style={{ fontSize: 10, color: COLORS.textMute }}>Tel: {ciQ.phone}</div>}
+          {ciQ.email && <div style={{ fontSize: 10, color: COLORS.textMute }}>{ciQ.email}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
           <div className="ledger-serif" style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Quotation</div>
@@ -941,33 +962,51 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     const [editingId, setEditingId] = useState(null);
     const [showNewClient, setShowNewClient] = useState(false);
+    const [newClient, setNewClient] = useState({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
 
   function startEdit(inv) {
     setEditingId(inv.id);
     setForm({ client: inv.client, project: inv.project || "", issueDate: inv.issueDate, dueDate: inv.dueDate, status: inv.status });
     setItems(inv.items && inv.items.length > 0 ? inv.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
-    setShowNewClient(!clients.includes(inv.client));
+    const known = clients.find(c => c.name === inv.client);
+    if (known) {
+      setShowNewClient(false);
+    } else {
+      setShowNewClient(true);
+      const ci = inv.clientInfo || { name: inv.client };
+      setNewClient({ name: ci.name || inv.client || "", reg: ci.reg || "", vat: ci.vat || "", address: ci.address || "", contact: ci.contact || "", phone: ci.phone || "", email: ci.email || "" });
+    }
   }
    function cancelEdit() {
     setEditingId(null);
     setForm({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     setShowNewClient(false);
+    setNewClient({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
   }
   function submit(e) {
     e.preventDefault();
     const amt = computeItemsTotal(items);
-    if (!form.client || amt <= 0) return;
-    addClient(form.client);
+    let clientInfo;
+    if (showNewClient) {
+      if (!newClient.name.trim() || amt <= 0) return;
+      clientInfo = { name: newClient.name.trim(), reg: newClient.reg.trim(), vat: newClient.vat.trim(), address: newClient.address.trim(), contact: newClient.contact.trim(), phone: newClient.phone.trim(), email: newClient.email.trim() };
+      addClient(clientInfo);
+    } else {
+      if (!form.client || amt <= 0) return;
+      clientInfo = clients.find(c => c.name === form.client) || { name: form.client };
+    }
+    const record = { ...form, client: clientInfo.name, clientInfo, items, amount: amt };
     if (editingId) {
-      updateInvoice(editingId, { ...form, items, amount: amt });
+      updateInvoice(editingId, record);
       setEditingId(null);
     } else {
-      addInvoice({ ...form, items, amount: amt });
+      addInvoice(record);
     }
     setForm({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     setShowNewClient(false);
+    setNewClient({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
   }
   const now = new Date();
   const sorted = [...invoices].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
@@ -980,21 +1019,36 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
         <SectionTitle>{editingId ? "Edit invoice" : "New invoice"}</SectionTitle>
                 <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+             <div style={{ flex: showNewClient ? "1 1 100%" : "1 1 180px", minWidth: 150 }}>
               <Label>Client</Label>
               {showNewClient ? (
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={{ ...inputStyle, flex: 1 }} placeholder="New client name" required autoFocus />
-                  {clients.length > 0 && <button type="button" onClick={() => { setShowNewClient(false); setForm({ ...form, client: "" }); }} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>Choose existing</button>}
+                <div style={{ border: `1px solid ${COLORS.line}`, borderRadius: 6, padding: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMute, textTransform: "uppercase" }}>New client</span>
+                    {clients.length > 0 && <button type="button" onClick={() => { setShowNewClient(false); setForm({ ...form, client: "" }); }} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 11 }}>Choose existing</button>}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input className="ledger-input" type="text" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} style={inputStyle} placeholder="Client name" required autoFocus />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input className="ledger-input" type="text" value={newClient.reg} onChange={e => setNewClient({ ...newClient, reg: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Reg no." />
+                      <input className="ledger-input" type="text" value={newClient.vat} onChange={e => setNewClient({ ...newClient, vat: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="VAT no." />
+                    </div>
+                    <input className="ledger-input" type="text" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} style={inputStyle} placeholder="Address" />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input className="ledger-input" type="text" value={newClient.contact} onChange={e => setNewClient({ ...newClient, contact: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Contact person" />
+                      <input className="ledger-input" type="text" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Phone/Cell" />
+                    </div>
+                    <input className="ledger-input" type="email" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} style={inputStyle} placeholder="Email" />
+                  </div>
                 </div>
               ) : (
                 <select className="ledger-input" value={form.client} onChange={e => {
-                  if (e.target.value === "__new__") { setShowNewClient(true); setForm({ ...form, client: "" }); }
+                  if (e.target.value === "__new__") { setShowNewClient(true); setForm({ ...form, client: "" }); setNewClient({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" }); }
                   else { setForm({ ...form, client: e.target.value }); }
                 }} style={inputStyle} required>
                   <option value="" disabled>Select client</option>
                   <option value="__new__">+ New client</option>
-                  {clients.map(c => <option key={c} value={c}>{c}</option>)}
+                  {clients.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
               )}
             </div>
@@ -1084,34 +1138,52 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     const [editingId, setEditingId] = useState(null);
     const [showNewClient, setShowNewClient] = useState(false);
+    const [newClient, setNewClient] = useState({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
 
   function startEdit(q) {
     setEditingId(q.id);
     setForm({ client: q.client, project: q.project || "", issueDate: q.issueDate, validUntil: q.validUntil, status: q.status });
     setItems(q.items && q.items.length > 0 ? q.items : [{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
-    setShowNewClient(!clients.includes(q.client));
+    const known = clients.find(c => c.name === q.client);
+    if (known) {
+      setShowNewClient(false);
+    } else {
+      setShowNewClient(true);
+      const ci = q.clientInfo || { name: q.client };
+      setNewClient({ name: ci.name || q.client || "", reg: ci.reg || "", vat: ci.vat || "", address: ci.address || "", contact: ci.contact || "", phone: ci.phone || "", email: ci.email || "" });
+    }
   }
   function cancelEdit() {
     setEditingId(null);
     setForm({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     setShowNewClient(false);
+    setNewClient({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
   }
 
   function submit(e) {
     e.preventDefault();
     const amt = computeItemsTotal(items);
-    if (!form.client || amt <= 0) return;
-    addClient(form.client);
+    let clientInfo;
+    if (showNewClient) {
+      if (!newClient.name.trim() || amt <= 0) return;
+      clientInfo = { name: newClient.name.trim(), reg: newClient.reg.trim(), vat: newClient.vat.trim(), address: newClient.address.trim(), contact: newClient.contact.trim(), phone: newClient.phone.trim(), email: newClient.email.trim() };
+      addClient(clientInfo);
+    } else {
+      if (!form.client || amt <= 0) return;
+      clientInfo = clients.find(c => c.name === form.client) || { name: form.client };
+    }
+    const record = { ...form, client: clientInfo.name, clientInfo, items, amount: amt };
     if (editingId) {
-      updateQuote(editingId, { ...form, items, amount: amt });
+      updateQuote(editingId, record);
       setEditingId(null);
     } else {
-      addQuote({ ...form, items, amount: amt });
+      addQuote(record);
     }
     setForm({ client: "", project: "", issueDate: todayISO(), validUntil: todayISO(), status: "draft" });
     setItems([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     setShowNewClient(false);
+    setNewClient({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
   }
   const sorted = [...quotes].sort((a, b) => new Date(b.issueDate) - new Date(a.issueDate));
   const totalOpen = quotes.filter(q => q.status !== "converted" && q.status !== "declined").reduce((s, q) => s + Number(q.amount), 0);
@@ -1131,21 +1203,36 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
         <SectionTitle>{editingId ? "Edit quote" : "New quote"}</SectionTitle>
                 <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-             <div style={{ flex: "1 1 180px", minWidth: 150 }}>
+             <div style={{ flex: showNewClient ? "1 1 100%" : "1 1 180px", minWidth: 150 }}>
               <Label>Client</Label>
               {showNewClient ? (
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input className="ledger-input" type="text" value={form.client} onChange={e => setForm({ ...form, client: e.target.value })} style={{ ...inputStyle, flex: 1 }} placeholder="New client name" required autoFocus />
-                  {clients.length > 0 && <button type="button" onClick={() => { setShowNewClient(false); setForm({ ...form, client: "" }); }} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 11, whiteSpace: "nowrap" }}>Choose existing</button>}
+                <div style={{ border: `1px solid ${COLORS.line}`, borderRadius: 6, padding: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textMute, textTransform: "uppercase" }}>New client</span>
+                    {clients.length > 0 && <button type="button" onClick={() => { setShowNewClient(false); setForm({ ...form, client: "" }); }} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 11 }}>Choose existing</button>}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input className="ledger-input" type="text" value={newClient.name} onChange={e => setNewClient({ ...newClient, name: e.target.value })} style={inputStyle} placeholder="Client name" required autoFocus />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input className="ledger-input" type="text" value={newClient.reg} onChange={e => setNewClient({ ...newClient, reg: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Reg no." />
+                      <input className="ledger-input" type="text" value={newClient.vat} onChange={e => setNewClient({ ...newClient, vat: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="VAT no." />
+                    </div>
+                    <input className="ledger-input" type="text" value={newClient.address} onChange={e => setNewClient({ ...newClient, address: e.target.value })} style={inputStyle} placeholder="Address" />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input className="ledger-input" type="text" value={newClient.contact} onChange={e => setNewClient({ ...newClient, contact: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Contact person" />
+                      <input className="ledger-input" type="text" value={newClient.phone} onChange={e => setNewClient({ ...newClient, phone: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Phone/Cell" />
+                    </div>
+                    <input className="ledger-input" type="email" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} style={inputStyle} placeholder="Email" />
+                  </div>
                 </div>
               ) : (
                 <select className="ledger-input" value={form.client} onChange={e => {
-                  if (e.target.value === "__new__") { setShowNewClient(true); setForm({ ...form, client: "" }); }
+                  if (e.target.value === "__new__") { setShowNewClient(true); setForm({ ...form, client: "" }); setNewClient({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" }); }
                   else { setForm({ ...form, client: e.target.value }); }
                 }} style={inputStyle} required>
                   <option value="" disabled>Select client</option>
                   <option value="__new__">+ New client</option>
-                  {clients.map(c => <option key={c} value={c}>{c}</option>)}
+                  {clients.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
               )}
             </div>
