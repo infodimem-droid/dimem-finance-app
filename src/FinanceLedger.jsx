@@ -541,7 +541,7 @@ function Header({ saveError }) {
     <div style={{ background: COLORS.ink, color: COLORS.paper, padding: "18px 20px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <img src={LOGO_DATA_URI} alt="DiMEM logo" style={{ height: 40, objectFit: "contain", background: "#fff", borderRadius: 4, padding: "3px 6px" }} />
+          <img src={LOGO_DATA_URI} alt="DiMEM logo" style={{ height: 56, objectFit: "contain", background: "#fff", borderRadius: 4, padding: "3px 6px" }} />
           <div>
             <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 600, letterSpacing: 0.3 }}>The Ledger</div>
             <div className="ledger-mono" style={{ fontSize: 11, color: COLORS.brassSoft }}>DiMEM (Pty) Ltd · company books</div>
