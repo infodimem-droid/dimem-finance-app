@@ -326,7 +326,7 @@ export default function FinanceLedger() {
 function LetterheadHeader({ docTitle }) {
   return (
     <div style={{ borderBottom: `3px solid ${COLORS.rust}`, paddingBottom: 14, marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
-      <img src={LOGO_DATA_URI} alt="DiMEM company logo" style={{ height: 78, objectFit: "contain" }} />
+<img src={LOGO_DATA_URI} alt="DiMEM company logo" style={{ height: 105, objectFit: "contain" }} />
       <div style={{ textAlign: "right" }}>
         <div className="ledger-serif" style={{ fontSize: 20, fontWeight: 700, color: COLORS.ink }}>{COMPANY.name}</div>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: COLORS.rust }}>{COMPANY.tagline}</div>
