@@ -100,6 +100,7 @@ const [authChecked, setAuthChecked] = useState(false);
         setAuthenticated(true);
         setUserEmail(session.user.email);
         fetchUserRole(session.user.id);
+        fetchClients();
       }
       setAuthChecked(true);
     });
@@ -109,6 +110,7 @@ const [authChecked, setAuthChecked] = useState(false);
         setAuthenticated(true);
         setUserEmail(session.user.email);
         fetchUserRole(session.user.id);
+        fetchClients();
       } else {
         setAuthenticated(false);
         setUserRole(null);
@@ -122,6 +124,11 @@ const [authChecked, setAuthChecked] = useState(false);
   async function fetchUserRole(userId) {
     const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
     if (!error && data) setUserRole(data.role);
+  }
+
+  async function fetchClients() {
+    const { data, error } = await supabase.from('clients').select('*').order('name');
+    if (!error && data) setClients(data);
   }
 
   async function handleLogin(email, password) {
@@ -143,7 +150,6 @@ const [authChecked, setAuthChecked] = useState(false);
         setTransactions(parsed.transactions || []);
         setInvoices(parsed.invoices || []);
         setQuotes(parsed.quotes || []);
-        setClients((parsed.clients || []).map(c => typeof c === "string" ? { name: c } : c));
       }
     } catch (e) {
       // key likely doesn't exist yet, or was corrupted — that's fine for a first run
@@ -156,12 +162,12 @@ const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
     if (!loaded) return;
     try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices, quotes, clients }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices, quotes }));
       setSaveError(null);
     } catch (e) {
       setSaveError("Changes aren't saving. Your data will be lost if you close this.");
     }
-  }, [transactions, invoices, quotes, clients, loaded]);
+  }, [transactions, invoices, quotes, loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
@@ -182,17 +188,18 @@ const [authChecked, setAuthChecked] = useState(false);
   function addTransaction(t) {
     setTransactions(prev => [...prev, { ...t, id: uid() }]);
   }
-  function addClient(clientObj) {
+  async function addClient(clientObj) {
     const name = (clientObj.name || "").trim();
     if (!name) return;
     const cleaned = { name, reg: clientObj.reg || "", vat: clientObj.vat || "", address: clientObj.address || "", contact: clientObj.contact || "", phone: clientObj.phone || "", email: clientObj.email || "" };
-    setClients(prev => {
-      const idx = prev.findIndex(c => c.name === name);
-      if (idx === -1) return [...prev, cleaned];
-      const updated = [...prev];
-      updated[idx] = { ...updated[idx], ...cleaned };
-      return updated;
-    });
+    const existing = clients.find(c => c.name === name);
+    if (existing) {
+      const { error } = await supabase.from('clients').update(cleaned).eq('id', existing.id);
+      if (!error) fetchClients();
+    } else {
+      const { error } = await supabase.from('clients').insert(cleaned);
+      if (!error) fetchClients();
+    }
   }
   function generateReference(prefix, existingRecords) {
     const today = new Date();
@@ -636,7 +643,15 @@ function QuoteDoc({ quote }) {
         </div>
       </div>
             <ItemsTable items={quote.items} fallbackAmount={quote.amount} fallbackLabel="Services quoted" totalLabel="Total quoted" />
-        <div style={{ fontSize: 9, color: COLORS.textMute, marginTop: 14 }}>Note: All work shall be processed and executed in accordance with attached DiMEM (Pty) Ltd's Standard Terms and Conditions.</div>
+      <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${COLORS.line}`, display: "flex", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ fontSize: 11, color: COLORS.textMute }}>
+          <div style={{ fontWeight: 700, color: COLORS.textMain, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 }}>Banking details</div>
+          <div>Bank: {BANKING_DETAILS.bank}</div>
+          <div>Branch: {BANKING_DETAILS.branchName} ({BANKING_DETAILS.branchCode})</div>
+          <div>Account number: {BANKING_DETAILS.accountNumber}</div>
+        </div>
+        <div style={{ fontSize: 9, color: COLORS.textMute, alignSelf: "flex-end", textAlign: "right", maxWidth: 260 }}>Note: All work shall be processed and executed in accordance with attached DiMEM (Pty) Ltd's Standard Terms and Conditions.</div>
+      </div>
     </div>
   );
 }
