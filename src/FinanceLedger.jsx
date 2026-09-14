@@ -102,6 +102,7 @@ const [authChecked, setAuthChecked] = useState(false);
         fetchUserRole(session.user.id);
         fetchClients();
         fetchTransactions();
+        fetchQuotes();
       }
       setAuthChecked(true);
     });
@@ -113,6 +114,7 @@ const [authChecked, setAuthChecked] = useState(false);
         fetchUserRole(session.user.id);
         fetchClients();
         fetchTransactions();
+        fetchQuotes();
       } else {
         setAuthenticated(false);
         setUserRole(null);
@@ -138,6 +140,24 @@ const [authChecked, setAuthChecked] = useState(false);
     if (!error && data) setTransactions(data);
   }
 
+  async function fetchQuotes() {
+    const { data, error } = await supabase.from('quotes').select('*').order('issue_date', { ascending: false });
+    if (!error && data) {
+      setQuotes(data.map(q => ({
+        id: q.id,
+        reference: q.reference,
+        client: q.client_name,
+        clientInfo: q.client_info,
+        project: q.project,
+        issueDate: q.issue_date,
+        validUntil: q.valid_until,
+        status: q.status,
+        items: q.items,
+        amount: q.amount,
+      })));
+    }
+  }
+
   async function handleLogin(email, password) {
     setAuthError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -155,7 +175,6 @@ const [authChecked, setAuthChecked] = useState(false);
       if (raw) {
         const parsed = JSON.parse(raw);
         setInvoices(parsed.invoices || []);
-        setQuotes(parsed.quotes || []);
       }
     } catch (e) {
       // key likely doesn't exist yet, or was corrupted — that's fine for a first run
@@ -168,12 +187,12 @@ const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ invoices, quotes }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ invoices }));
       setSaveError(null);
     } catch (e) {
       setSaveError("Changes aren't saving. Your data will be lost if you close this.");
     }
-  }, [invoices, quotes, loaded]);
+  }, [invoices, loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
@@ -246,18 +265,24 @@ const [authChecked, setAuthChecked] = useState(false);
     function deleteInvoice(id) {
     setInvoices(prev => prev.filter(i => i.id !== id));
   }
-  function addQuote(q) {
+  async function addQuote(q) {
     const reference = generateReference("SQ", quotes);
-    setQuotes(prev => [...prev, { ...q, id: uid(), reference }]);
+    const cleaned = { reference, client_name: q.client, client_info: q.clientInfo, project: q.project, issue_date: q.issueDate, valid_until: q.validUntil, status: q.status, items: q.items, amount: q.amount };
+    const { error } = await supabase.from('quotes').insert(cleaned);
+    if (!error) fetchQuotes();
   }
-  function updateQuote(id, data) {
-    setQuotes(prev => prev.map(q => q.id === id ? { ...q, ...data } : q));
+  async function updateQuote(id, data) {
+    const cleaned = { client_name: data.client, client_info: data.clientInfo, project: data.project, issue_date: data.issueDate, valid_until: data.validUntil, status: data.status, items: data.items, amount: data.amount };
+    const { error } = await supabase.from('quotes').update(cleaned).eq('id', id);
+    if (!error) fetchQuotes();
   }
-  function updateQuoteStatus(id, status) {
-    setQuotes(prev => prev.map(q => q.id === id ? { ...q, status } : q));
+  async function updateQuoteStatus(id, status) {
+    const { error } = await supabase.from('quotes').update({ status }).eq('id', id);
+    if (!error) fetchQuotes();
   }
-  function deleteQuote(id) {
-    setQuotes(prev => prev.filter(q => q.id !== id));
+  async function deleteQuote(id) {
+    const { error } = await supabase.from('quotes').delete().eq('id', id);
+    if (!error) fetchQuotes();
   }
   function convertQuoteToInvoice(quote) {
     addInvoice({
