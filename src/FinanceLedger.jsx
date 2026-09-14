@@ -103,6 +103,7 @@ const [authChecked, setAuthChecked] = useState(false);
         fetchClients();
         fetchTransactions();
         fetchQuotes();
+        fetchInvoices();
       }
       setAuthChecked(true);
     });
@@ -115,6 +116,7 @@ const [authChecked, setAuthChecked] = useState(false);
         fetchClients();
         fetchTransactions();
         fetchQuotes();
+        fetchInvoices();
       } else {
         setAuthenticated(false);
         setUserRole(null);
@@ -158,6 +160,24 @@ const [authChecked, setAuthChecked] = useState(false);
     }
   }
 
+  async function fetchInvoices() {
+    const { data, error } = await supabase.from('invoices').select('*').order('issue_date', { ascending: false });
+    if (!error && data) {
+      setInvoices(data.map(i => ({
+        id: i.id,
+        reference: i.reference,
+        client: i.client_name,
+        clientInfo: i.client_info,
+        project: i.project,
+        issueDate: i.issue_date,
+        dueDate: i.due_date,
+        status: i.status,
+        items: i.items,
+        amount: i.amount,
+      })));
+    }
+  }
+
   async function handleLogin(email, password) {
     setAuthError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -174,7 +194,6 @@ const [authChecked, setAuthChecked] = useState(false);
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setInvoices(parsed.invoices || []);
       }
     } catch (e) {
       // key likely doesn't exist yet, or was corrupted — that's fine for a first run
@@ -187,12 +206,11 @@ const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ invoices }));
       setSaveError(null);
     } catch (e) {
       setSaveError("Changes aren't saving. Your data will be lost if you close this.");
     }
-  }, [invoices, loaded]);
+  }, [loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
@@ -252,18 +270,24 @@ const [authChecked, setAuthChecked] = useState(false);
     const { error } = await supabase.from('transactions').delete().eq('id', id);
     if (!error) fetchTransactions();
   }
-  function addInvoice(inv) {
+  async function addInvoice(inv) {
     const reference = generateReference("INV", invoices);
-    setInvoices(prev => [...prev, { ...inv, id: uid(), reference }]);
+    const cleaned = { reference, client_name: inv.client, client_info: inv.clientInfo, project: inv.project, issue_date: inv.issueDate, due_date: inv.dueDate, status: inv.status, items: inv.items, amount: inv.amount };
+    const { error } = await supabase.from('invoices').insert(cleaned);
+    if (!error) fetchInvoices();
   }
-  function updateInvoice(id, data) {
-    setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...data } : i));
+  async function updateInvoice(id, data) {
+    const cleaned = { client_name: data.client, client_info: data.clientInfo, project: data.project, issue_date: data.issueDate, due_date: data.dueDate, status: data.status, items: data.items, amount: data.amount };
+    const { error } = await supabase.from('invoices').update(cleaned).eq('id', id);
+    if (!error) fetchInvoices();
   }
-  function updateInvoiceStatus(id, status) {
-    setInvoices(prev => prev.map(i => i.id === id ? { ...i, status } : i));
+  async function updateInvoiceStatus(id, status) {
+    const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
+    if (!error) fetchInvoices();
   }
-    function deleteInvoice(id) {
-    setInvoices(prev => prev.filter(i => i.id !== id));
+    async function deleteInvoice(id) {
+    const { error } = await supabase.from('invoices').delete().eq('id', id);
+    if (!error) fetchInvoices();
   }
   async function addQuote(q) {
     const reference = generateReference("SQ", quotes);
