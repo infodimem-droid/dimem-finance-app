@@ -101,6 +101,7 @@ const [authChecked, setAuthChecked] = useState(false);
         setUserEmail(session.user.email);
         fetchUserRole(session.user.id);
         fetchClients();
+        fetchTransactions();
       }
       setAuthChecked(true);
     });
@@ -111,6 +112,7 @@ const [authChecked, setAuthChecked] = useState(false);
         setUserEmail(session.user.email);
         fetchUserRole(session.user.id);
         fetchClients();
+        fetchTransactions();
       } else {
         setAuthenticated(false);
         setUserRole(null);
@@ -131,6 +133,11 @@ const [authChecked, setAuthChecked] = useState(false);
     if (!error && data) setClients(data);
   }
 
+  async function fetchTransactions() {
+    const { data, error } = await supabase.from('transactions').select('*').order('date', { ascending: false });
+    if (!error && data) setTransactions(data);
+  }
+
   async function handleLogin(email, password) {
     setAuthError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -147,7 +154,6 @@ const [authChecked, setAuthChecked] = useState(false);
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setTransactions(parsed.transactions || []);
         setInvoices(parsed.invoices || []);
         setQuotes(parsed.quotes || []);
       }
@@ -162,12 +168,12 @@ const [authChecked, setAuthChecked] = useState(false);
   useEffect(() => {
     if (!loaded) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ transactions, invoices, quotes }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ invoices, quotes }));
       setSaveError(null);
     } catch (e) {
       setSaveError("Changes aren't saving. Your data will be lost if you close this.");
     }
-  }, [transactions, invoices, quotes, loaded]);
+  }, [invoices, quotes, loaded]);
 
   // Trigger the browser print dialog once a print target is rendered
   useEffect(() => {
@@ -185,8 +191,10 @@ const [authChecked, setAuthChecked] = useState(false);
     return () => { clearTimeout(t); window.removeEventListener("afterprint", handleAfterPrint); document.title = originalTitle; };
   }, [printTarget]);
 
-  function addTransaction(t) {
-    setTransactions(prev => [...prev, { ...t, id: uid() }]);
+  async function addTransaction(t) {
+    const cleaned = { date: t.date, type: t.type, category: t.category, description: t.description || "", amount: t.amount };
+    const { error } = await supabase.from('transactions').insert(cleaned);
+    if (!error) fetchTransactions();
   }
   async function addClient(clientObj) {
     const name = (clientObj.name || "").trim();
@@ -221,9 +229,10 @@ const [authChecked, setAuthChecked] = useState(false);
     }
     return `${todayPrefix}${String.fromCharCode(65 + letterIdx)}${number}`;
   }
-  function deleteTransaction(id) {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  }  
+  async function deleteTransaction(id) {
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (!error) fetchTransactions();
+  }
   function addInvoice(inv) {
     const reference = generateReference("INV", invoices);
     setInvoices(prev => [...prev, { ...inv, id: uid(), reference }]);
