@@ -251,7 +251,7 @@ const [authChecked, setAuthChecked] = useState(false);
   }, [printTarget]);
 
   async function addTransaction(t) {
-    const cleaned = { date: t.date, type: t.type, category: t.category, description: t.description || "", amount: t.amount };
+    const cleaned = { date: t.date, type: t.type, method: t.method, category: t.category, description: t.description || "", amount: t.amount };
     const { error } = await supabase.from('transactions').insert(cleaned);
     if (!error) fetchTransactions();
   }
@@ -623,6 +623,9 @@ function AnnualReportDoc({ year, transactions, monthlyData }) {
   const income = transactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = income - expense;
+
+  const cashNet = transactions.filter(t => t.method === "cash").reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+  const bankNet = transactions.filter(t => t.method === "bank").reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
   return (
     <div>
       <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>Annual Financial Report</div>
@@ -631,6 +634,8 @@ function AnnualReportDoc({ year, transactions, monthlyData }) {
         <DocStat label="Total income" value={fmtMoney(income)} color={COLORS.green} />
         <DocStat label="Total expenses" value={fmtMoney(expense)} color={COLORS.rust} />
         <DocStat label="Net profit" value={fmtMoney(net)} color={net >= 0 ? COLORS.green : COLORS.rust} />
+        <DocStat label="Cash" value={fmtMoney(cashNet)} color={cashNet >= 0 ? COLORS.green : COLORS.rust} />
+        <DocStat label="Bank" value={fmtMoney(bankNet)} color={bankNet >= 0 ? COLORS.green : COLORS.rust} />
       </div>
       <div className="ledger-serif" style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Month by month</div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 18 }}>
@@ -974,6 +979,9 @@ function Dashboard({ transactions, invoices, vatRegistered, vatRate, vatNumber, 
   const expense = monthTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = income - expense;
 
+  const cashBalance = transactions.filter(t => t.method === "cash").reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+  const bankBalance = transactions.filter(t => t.method === "bank").reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+
   const outstanding = invoices.filter(i => i.status !== "paid");
   const outstandingTotal = outstanding.reduce((s, i) => s + Number(i.amount), 0);
   const overdue = outstanding.filter(i => new Date(i.dueDate) < now);
@@ -1003,6 +1011,14 @@ function Dashboard({ transactions, invoices, vatRegistered, vatRate, vatNumber, 
           <input type="number" step="0.01" value={vatForm.vatRate} onChange={e => setVatForm({ ...vatForm, vatRate: e.target.value })} style={{ ...inputStyle, width: 90 }} placeholder="VAT %" />
           <input type="text" value={vatForm.vatNumber} onChange={e => setVatForm({ ...vatForm, vatNumber: e.target.value })} style={{ ...inputStyle, width: 200 }} placeholder="VAT number" />
           <button onClick={() => onUpdateSettings({ vat_registered: vatForm.vatRegistered, vat_rate: Number(vatForm.vatRate) || 0, vat_number: vatForm.vatNumber })} style={{ padding: "8px 16px", background: COLORS.brass, color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Save</button>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>Account balances</SectionTitle>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+          <StatBlock label="Cash balance" value={fmtMoney(cashBalance)} color={cashBalance >= 0 ? COLORS.green : COLORS.rust} />
+          <StatBlock label="Bank balance" value={fmtMoney(bankBalance)} color={bankBalance >= 0 ? COLORS.green : COLORS.rust} />
         </div>
       </Card>
 
@@ -1054,7 +1070,7 @@ function Dashboard({ transactions, invoices, vatRegistered, vatRate, vatNumber, 
 
 // ---------- Transactions Tab ----------
 function TransactionsTab({ transactions, addTransaction, deleteTransaction, fileInputRef, handleCSVFile, importPreview, setImportPreview, confirmImport, importError, setImportError }) {
-  const [form, setForm] = useState({ date: todayISO(), type: "income", category: CATEGORIES_INCOME[0], description: "", amount: "" });
+const [form, setForm] = useState({ date: todayISO(), type: "income", method: "bank", category: CATEGORIES_INCOME[0], description: "", amount: "" });
   const [filterType, setFilterType] = useState("all");
   const [sortDesc, setSortDesc] = useState(true);
 
@@ -1063,7 +1079,7 @@ function TransactionsTab({ transactions, addTransaction, deleteTransaction, file
     const amt = parseFloat(form.amount);
     if (!form.date || isNaN(amt) || amt <= 0) return;
     addTransaction({ ...form, amount: amt });
-    setForm({ date: form.date, type: form.type, category: form.type === "income" ? CATEGORIES_INCOME[0] : CATEGORIES_EXPENSE[0], description: "", amount: "" });
+    setForm({ date: form.date, type: form.type, method: form.method, category: form.type === "income" ? CATEGORIES_INCOME[0] : CATEGORIES_EXPENSE[0], description: "", amount: "" });
   }
 
   const categoryOptions = form.type === "income" ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
@@ -1091,6 +1107,13 @@ function TransactionsTab({ transactions, addTransaction, deleteTransaction, file
             }} style={inputStyle}>
               <option value="income">Income</option>
               <option value="expense">Expense</option>
+            </select>
+          </div>
+          <div style={{ width: 130 }}>
+            <Label>Method</Label>
+            <select value={form.method} onChange={e => setForm({ ...form, method: e.target.value })} style={inputStyle}>
+              <option value="bank">Bank</option>
+              <option value="cash">Cash</option>
             </select>
           </div>
           <div style={{ width: 170 }}>
@@ -1165,7 +1188,7 @@ function TransactionsTab({ transactions, addTransaction, deleteTransaction, file
             <table className="ledger-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr className="ledger-row-line">
-                  {["Date", "Category", "Description", "Amount", ""].map(h => (
+                  {["Date", "Category", "Method", "Description", "Amount", ""].map(h => (
                     <th key={h} style={{ textAlign: h === "Amount" ? "right" : "left", padding: "6px", color: COLORS.textMute, fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>
                   ))}
                 </tr>
@@ -1175,6 +1198,7 @@ function TransactionsTab({ transactions, addTransaction, deleteTransaction, file
                   <tr key={t.id} className="ledger-row-line">
                     <td style={{ padding: "8px 6px", whiteSpace: "nowrap" }} className="ledger-mono">{t.date}</td>
                     <td style={{ padding: "8px 6px" }}>{t.category}</td>
+                    <td style={{ padding: "8px 6px", textTransform: "capitalize", color: COLORS.textMute }}>{t.method}</td>
                     <td style={{ padding: "8px 6px", color: COLORS.textMute }}>{t.description}</td>
                     <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 600, color: t.type === "income" ? COLORS.green : COLORS.rust }} className="ledger-mono">
                       {t.type === "income" ? "+" : "-"}{fmtMoney(t.amount)}
@@ -1566,10 +1590,21 @@ function QuotesTab({ quotes, addQuote, updateQuote, updateQuoteStatus, deleteQuo
   );
 }
 // ---------- Reports Tab ----------
+const FISCAL_MONTH_ORDER = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1]; // Mar..Feb
+function isInFiscalYear(dateStr, year) {
+  const d = new Date(dateStr);
+  const m = d.getMonth();
+  return (m >= 2 && d.getFullYear() === year) || (m < 2 && d.getFullYear() === year + 1);
+}
+
 function ReportsTab({ transactions, invoices, onPrint }) {
   const years = useMemo(() => {
-    const s = new Set(transactions.map(t => new Date(t.date).getFullYear()));
-    s.add(new Date().getFullYear());
+    const s = new Set(transactions.map(t => {
+      const d = new Date(t.date);
+      return d.getMonth() >= 2 ? d.getFullYear() : d.getFullYear() - 1;
+    }));
+    const now = new Date();
+    s.add(now.getMonth() >= 2 ? now.getFullYear() : now.getFullYear() - 1);
     return [...s].sort((a, b) => b - a);
   }, [transactions]);
 
@@ -1593,7 +1628,7 @@ function ReportsTab({ transactions, invoices, onPrint }) {
           <div>
             <Label>Year</Label>
             <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ ...inputStyle, width: 110 }}>
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
+              {years.map(y => <option key={y} value={y}>{y}/{y + 1}</option>)}
             </select>
           </div>
           {mode === "monthly" && (
@@ -1614,12 +1649,12 @@ function ReportsTab({ transactions, invoices, onPrint }) {
                 });
                 onPrint({ type: "monthlyReport", payload: { year, month, transactions: monthTx } });
               } else {
-                const yearTx = transactions.filter(t => new Date(t.date).getFullYear() === year);
-                const monthlyData = MONTH_NAMES.map((name, idx) => {
+                const yearTx = transactions.filter(t => isInFiscalYear(t.date, year));
+                const monthlyData = FISCAL_MONTH_ORDER.map(idx => {
                   const tx = yearTx.filter(t => new Date(t.date).getMonth() === idx);
                   const inc = tx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
                   const exp = tx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-                  return { name, Income: inc, Expenses: exp, Net: inc - exp };
+                  return { name: MONTH_NAMES[idx], Income: inc, Expenses: exp, Net: inc - exp };
                 });
                 onPrint({ type: "annualReport", payload: { year, transactions: yearTx, monthlyData } });
               }
@@ -1673,6 +1708,9 @@ function MonthlyReport({ transactions, invoices, year, month }) {
   const expense = monthTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = income - expense;
 
+  const cashNet = monthTx.filter(t => t.method === "cash").reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+  const bankNet = monthTx.filter(t => t.method === "bank").reduce((s, t) => s + (t.type === "income" ? Number(t.amount) : -Number(t.amount)), 0);
+
   const invIssued = invoices.filter(i => {
     const d = new Date(i.issueDate);
     return d.getFullYear() === year && d.getMonth() === month;
@@ -1686,6 +1724,14 @@ function MonthlyReport({ transactions, invoices, year, month }) {
           <StatBlock label="Income" value={fmtMoney(income)} color={COLORS.green} />
           <StatBlock label="Expenses" value={fmtMoney(expense)} color={COLORS.rust} />
           <StatBlock label="Net profit" value={fmtMoney(net)} color={net >= 0 ? COLORS.green : COLORS.rust} />
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle sub={`${MONTH_NAMES[month]} ${year}`}>Cash & bank movement</SectionTitle>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+          <StatBlock label="Cash" value={fmtMoney(cashNet)} color={cashNet >= 0 ? COLORS.green : COLORS.rust} />
+          <StatBlock label="Bank" value={fmtMoney(bankNet)} color={bankNet >= 0 ? COLORS.green : COLORS.rust} />
         </div>
       </Card>
 
@@ -1724,26 +1770,26 @@ function MonthlyReport({ transactions, invoices, year, month }) {
 }
 
 function AnnualReport({ transactions, invoices, year }) {
-  const yearTx = transactions.filter(t => new Date(t.date).getFullYear() === year);
+  const yearTx = transactions.filter(t => isInFiscalYear(t.date, year));
   const income = yearTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const expense = yearTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = income - expense;
 
-  const monthlyData = MONTH_NAMES.map((name, idx) => {
+  const monthlyData = FISCAL_MONTH_ORDER.map(idx => {
     const tx = yearTx.filter(t => new Date(t.date).getMonth() === idx);
     const inc = tx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
     const exp = tx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-    return { name, Income: inc, Expenses: exp, Net: inc - exp };
+    return { name: MONTH_NAMES[idx], Income: inc, Expenses: exp, Net: inc - exp };
   });
 
-  const yearInvoices = invoices.filter(i => new Date(i.issueDate).getFullYear() === year);
+  const yearInvoices = invoices.filter(i => isInFiscalYear(i.issueDate, year));
   const outstanding = yearInvoices.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
   const collected = yearInvoices.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
 
   return (
     <>
       <Card>
-        <SectionTitle sub={`${year}`}>Annual profit & loss</SectionTitle>
+        <SectionTitle sub={`Mar ${year} – Feb ${year + 1}`}>Annual profit & loss</SectionTitle>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
           <StatBlock label="Total income" value={fmtMoney(income)} color={COLORS.green} />
           <StatBlock label="Total expenses" value={fmtMoney(expense)} color={COLORS.rust} />
@@ -1780,7 +1826,7 @@ function AnnualReport({ transactions, invoices, year }) {
       </div>
 
       <Card>
-        <SectionTitle sub={`Invoices issued in ${year}`}>Accounts receivable</SectionTitle>
+        <SectionTitle sub={`Invoices issued Mar ${year} – Feb ${year + 1}`}>Accounts receivable</SectionTitle>
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
           <StatBlock label="Collected" value={fmtMoney(collected)} color={COLORS.green} />
           <StatBlock label="Outstanding" value={fmtMoney(outstanding)} color={COLORS.brass} />
