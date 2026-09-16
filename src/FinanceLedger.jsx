@@ -92,6 +92,10 @@ const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+  const [companySettingsId, setCompanySettingsId] = useState(null);
+  const [vatRegistered, setVatRegistered] = useState(false);
+  const [vatRate, setVatRate] = useState(15);
+  const [vatNumber, setVatNumber] = useState("");
 
   // Check for an existing Supabase session, and keep it in sync as it changes
   useEffect(() => {
@@ -104,6 +108,7 @@ const [authChecked, setAuthChecked] = useState(false);
         fetchTransactions();
         fetchQuotes();
         fetchInvoices();
+        fetchCompanySettings();
       }
       setAuthChecked(true);
     });
@@ -117,6 +122,7 @@ const [authChecked, setAuthChecked] = useState(false);
         fetchTransactions();
         fetchQuotes();
         fetchInvoices();
+        fetchCompanySettings();
       } else {
         setAuthenticated(false);
         setUserRole(null);
@@ -158,6 +164,22 @@ const [authChecked, setAuthChecked] = useState(false);
         amount: q.amount,
       })));
     }
+  }
+
+  async function fetchCompanySettings() {
+    const { data, error } = await supabase.from('company_settings').select('*').limit(1).single();
+    if (!error && data) {
+      setCompanySettingsId(data.id);
+      setVatRegistered(data.vat_registered);
+      setVatRate(data.vat_rate);
+      setVatNumber(data.vat_number || "");
+    }
+  }
+
+  async function updateCompanySettings(updates) {
+    if (!companySettingsId) return;
+    const { error } = await supabase.from('company_settings').update(updates).eq('id', companySettingsId);
+    if (!error) fetchCompanySettings();
   }
 
   async function fetchInvoices() {
@@ -418,7 +440,7 @@ if (!authChecked) return null;
         {!loaded ? (
           <div className="ledger-serif" style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>New invoice</div>
         ) : tab === "dashboard" ? (
-          <Dashboard transactions={transactions} invoices={invoices} />
+          <Dashboard transactions={transactions} invoices={invoices} vatRegistered={vatRegistered} vatRate={vatRate} vatNumber={vatNumber} onUpdateSettings={updateCompanySettings} />
         ) : tab === "transactions" ? (
           <TransactionsTab
             transactions={transactions}
@@ -441,8 +463,8 @@ if (!authChecked) return null;
         )}
       </div>
 
-      <div className="print-only" id="print-area">
-        <PrintDocument target={printTarget} />
+<div className="print-only" id="print-area">
+        <PrintDocument target={printTarget} vatRegistered={vatRegistered} vatRate={vatRate} vatNumber={vatNumber} />
       </div>
     </div>
   );
@@ -493,7 +515,7 @@ function LoginGate({ onSubmit, authError }) {
 }
 
 // ---------- Letterhead (used on every generated/printed document) ----------
-function LetterheadHeader({ docTitle }) {
+function LetterheadHeader({ docTitle, vatRegistered, vatNumber }) {
   return (
     <div style={{ borderBottom: `3px solid ${COLORS.rust}`, paddingBottom: 14, marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
 <img src={LOGO_DATA_URI} alt="DiMEM company logo" style={{ height: 105, objectFit: "contain" }} />
@@ -504,6 +526,7 @@ function LetterheadHeader({ docTitle }) {
         <div style={{ fontSize: 11, color: COLORS.textMute }}>{COMPANY.address}</div>
         <div style={{ fontSize: 11, color: COLORS.textMute }}>{COMPANY.contact}</div>
         <div style={{ fontSize: 11, color: COLORS.textMute }}>{COMPANY.web}</div>
+        {vatRegistered && vatNumber && <div style={{ fontSize: 11, color: COLORS.textMute }}>VAT No: {vatNumber}</div>}
       </div>
       {docTitle && (
         <div style={{ position: "absolute" }} />
@@ -527,16 +550,16 @@ function LetterheadFooter({ pageLabel }) {
   );
 }
 
-function PrintDocument({ target }) {
+function PrintDocument({ target, vatRegistered, vatRate, vatNumber }) {
   if (!target) return null;
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: COLORS.textMain, background: "#fff", padding: "36px 40px", maxWidth: 800, margin: "0 auto" }}>
       <style>{`${FONT_IMPORT} .ledger-serif { font-family: '"'"'Fraunces'"'"', serif; } .ledger-mono { font-family: '"'"'IBM Plex Mono'"'"', monospace; font-variant-numeric: tabular-nums; }`}</style>
-      <LetterheadHeader />
+      <LetterheadHeader vatRegistered={vatRegistered} vatNumber={vatNumber} />
       {target.type === "monthlyReport" && <MonthlyReportDoc {...target.payload} />}
       {target.type === "annualReport" && <AnnualReportDoc {...target.payload} />}
-      {target.type === "invoice" && <InvoiceDoc {...target.payload} />}
-      {target.type === "quote" && <QuoteDoc {...target.payload} />}
+      {target.type === "invoice" && <InvoiceDoc {...target.payload} vatRegistered={vatRegistered} vatRate={vatRate} />}
+      {target.type === "quote" && <QuoteDoc {...target.payload} vatRegistered={vatRegistered} vatRate={vatRate} />}
       <LetterheadFooter pageLabel={`Generated ${fmtLongDate(todayISO())}`} />
     </div>
   );
@@ -636,7 +659,7 @@ function AnnualReportDoc({ year, transactions, monthlyData }) {
   );
 }
 
-function InvoiceDoc({ invoice }) {
+function InvoiceDoc({ invoice, vatRegistered, vatRate }) {
   const isOverdue = invoice.status !== "paid" && new Date(invoice.dueDate) < new Date();
   const ciI = invoice.clientInfo || { name: invoice.client };
   return (
@@ -663,7 +686,7 @@ function InvoiceDoc({ invoice }) {
           </div>
         </div>
       </div>
-            <ItemsTable items={invoice.items} fallbackAmount={invoice.amount} fallbackLabel="Services rendered" totalLabel="Total due" />
+            <ItemsTable items={invoice.items} fallbackAmount={invoice.amount} fallbackLabel="Services rendered" totalLabel="Total due" vatRegistered={vatRegistered} vatRate={vatRate} />
       <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${COLORS.line}`, display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div style={{ fontSize: 11, color: COLORS.textMute }}>
           <div style={{ fontWeight: 700, color: COLORS.textMain, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 }}>Banking details</div>
@@ -676,7 +699,7 @@ function InvoiceDoc({ invoice }) {
     </div>
   );
 }
-function QuoteDoc({ quote }) {
+function QuoteDoc({ quote, vatRegistered, vatRate }) {
   const ciQ = quote.clientInfo || { name: quote.client };
   return (
     <div>
@@ -700,7 +723,7 @@ function QuoteDoc({ quote }) {
           <div style={{ fontSize: 11, marginTop: 4, fontWeight: 700, color: COLORS.brass, textTransform: "uppercase" }}>{quote.status}</div>
         </div>
       </div>
-            <ItemsTable items={quote.items} fallbackAmount={quote.amount} fallbackLabel="Services quoted" totalLabel="Total quoted" />
+            <ItemsTable items={quote.items} fallbackAmount={quote.amount} fallbackLabel="Services quoted" totalLabel="Total quoted" vatRegistered={vatRegistered} vatRate={vatRate} />
       <div style={{ marginTop: 20, paddingTop: 14, borderTop: `1px solid ${COLORS.line}`, display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div style={{ fontSize: 11, color: COLORS.textMute }}>
           <div style={{ fontWeight: 700, color: COLORS.textMain, marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 }}>Banking details</div>
@@ -892,7 +915,7 @@ function LineItemsEditor({ items, setItems }) {
   );
 }
 
-function ItemsTable({ items, fallbackAmount, fallbackLabel, totalLabel }) {
+function ItemsTable({ items, fallbackAmount, fallbackLabel, totalLabel, vatRegistered, vatRate }) {
   const list = (items && items.length > 0) ? items : [{ id: "legacy", description: fallbackLabel || "Services rendered", quantity: 1, unitPrice: fallbackAmount || 0 }];
   const total = computeItemsTotal(list);
   return (
@@ -917,15 +940,28 @@ function ItemsTable({ items, fallbackAmount, fallbackLabel, totalLabel }) {
       </tbody>
       <tfoot>
         <tr>
-          <td colSpan={3} style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }}>{totalLabel || "Total"}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700 }} className="ledger-mono">{fmtMoney(total)}</td>
+          <td colSpan={3} style={{ padding: "10px 6px", textAlign: "right", fontWeight: vatRegistered ? 400 : 700 }}>{vatRegistered ? "Subtotal" : (totalLabel || "Total")}</td>
+          <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: vatRegistered ? 400 : 700 }} className="ledger-mono">{fmtMoney(total)}</td>
         </tr>
+        {vatRegistered && (
+          <>
+            <tr>
+              <td colSpan={3} style={{ padding: "4px 6px", textAlign: "right" }}>{`VAT (${vatRate}%)`}</td>
+              <td style={{ padding: "4px 6px", textAlign: "right" }} className="ledger-mono">{fmtMoney(total * (Number(vatRate) || 0) / 100)}</td>
+            </tr>
+            <tr>
+              <td colSpan={3} style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700, borderTop: `1px solid ${COLORS.line}` }}>{totalLabel || "Total"}</td>
+              <td style={{ padding: "10px 6px", textAlign: "right", fontWeight: 700, borderTop: `1px solid ${COLORS.line}` }} className="ledger-mono">{fmtMoney(total * (1 + (Number(vatRate) || 0) / 100))}</td>
+            </tr>
+          </>
+        )}
       </tfoot>
     </table>
   );
 }
 // ---------- Dashboard ----------
-function Dashboard({ transactions, invoices }) {
+function Dashboard({ transactions, invoices, vatRegistered, vatRate, vatNumber, onUpdateSettings }) {
+  const [vatForm, setVatForm] = useState({ vatRegistered, vatRate, vatNumber });
   const now = new Date();
   const thisMonth = now.getMonth();
   const thisYear = now.getFullYear();
@@ -957,6 +993,19 @@ function Dashboard({ transactions, invoices }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Card>
+        <SectionTitle>Company settings</SectionTitle>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+            <input type="checkbox" checked={vatForm.vatRegistered} onChange={e => setVatForm({ ...vatForm, vatRegistered: e.target.checked })} />
+            VAT registered
+          </label>
+          <input type="number" step="0.01" value={vatForm.vatRate} onChange={e => setVatForm({ ...vatForm, vatRate: e.target.value })} style={{ ...inputStyle, width: 90 }} placeholder="VAT %" />
+          <input type="text" value={vatForm.vatNumber} onChange={e => setVatForm({ ...vatForm, vatNumber: e.target.value })} style={{ ...inputStyle, width: 200 }} placeholder="VAT number" />
+          <button onClick={() => onUpdateSettings({ vat_registered: vatForm.vatRegistered, vat_rate: Number(vatForm.vatRate) || 0, vat_number: vatForm.vatNumber })} style={{ padding: "8px 16px", background: COLORS.brass, color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Save</button>
+        </div>
+      </Card>
+
       <Card>
         <SectionTitle sub={`${MONTH_NAMES[thisMonth]} ${thisYear}`}>This month</SectionTitle>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
