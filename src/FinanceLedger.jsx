@@ -193,6 +193,7 @@ const [authChecked, setAuthChecked] = useState(false);
         project: i.project,
         issueDate: i.issue_date,
         dueDate: i.due_date,
+        paidDate: i.paid_date,
         status: i.status,
         items: i.items,
         amount: i.amount,
@@ -243,6 +244,8 @@ const [authChecked, setAuthChecked] = useState(false);
       const clientName = (record.clientInfo && record.clientInfo.name) || record.client || "Document";
       const ref = record.reference || "";
       document.title = ref ? `${clientName} - ${ref}` : clientName;
+    } else if (printTarget.type === "clientStatement") {
+      document.title = `Statement ${printTarget.payload.client || ""}`.trim();
     }
     const t = setTimeout(() => window.print(), 80);
     const handleAfterPrint = () => { setPrintTarget(null); document.title = originalTitle; };
@@ -267,6 +270,17 @@ const [authChecked, setAuthChecked] = useState(false);
       const { error } = await supabase.from('clients').insert(cleaned);
       if (!error) fetchClients();
     }
+  }
+  async function updateClient(id, clientObj) {
+    const name = (clientObj.name || "").trim();
+    if (!name) return;
+    const cleaned = { name, reg: clientObj.reg || "", vat: clientObj.vat || "", address: clientObj.address || "", contact: clientObj.contact || "", phone: clientObj.phone || "", email: clientObj.email || "" };
+    const { error } = await supabase.from('clients').update(cleaned).eq('id', id);
+    if (!error) fetchClients();
+  }
+  async function deleteClient(id) {
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (!error) fetchClients();
   }
   function generateReference(prefix, existingRecords) {
     const today = new Date();
@@ -304,7 +318,12 @@ const [authChecked, setAuthChecked] = useState(false);
     if (!error) fetchInvoices();
   }
   async function updateInvoiceStatus(id, status) {
-    const { error } = await supabase.from('invoices').update({ status }).eq('id', id);
+    const updates = { status, paid_date: status === "paid" ? todayISO() : null };
+    const { error } = await supabase.from('invoices').update(updates).eq('id', id);
+    if (!error) fetchInvoices();
+  }
+  async function updatePaidDate(id, paidDate) {
+    const { error } = await supabase.from('invoices').update({ paid_date: paidDate }).eq('id', id);
     if (!error) fetchInvoices();
   }
     async function deleteInvoice(id) {
@@ -395,6 +414,8 @@ const [authChecked, setAuthChecked] = useState(false);
     { id: "transactions", label: "Transactions" },
     { id: "quotes", label: "Quotes" },
     { id: "invoices", label: "Invoices" },
+    { id: "statements", label: "Statements" },
+    { id: "clients", label: "Clients" },
     { id: "reports", label: "Reports" },
   ];
 
@@ -457,7 +478,11 @@ if (!authChecked) return null;
                 ) : tab === "quotes" ? (
           <QuotesTab quotes={quotes} addQuote={addQuote} updateQuote={updateQuote} updateQuoteStatus={updateQuoteStatus} deleteQuote={deleteQuote} convertQuoteToInvoice={convertQuoteToInvoice} onPrint={setPrintTarget} clients={clients} addClient={addClient} />
         ) : tab === "invoices" ? (
-          <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoice={updateInvoice} updateInvoiceStatus={updateInvoiceStatus} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} clients={clients} addClient={addClient} />
+          <InvoicesTab invoices={invoices} addInvoice={addInvoice} updateInvoice={updateInvoice} updateInvoiceStatus={updateInvoiceStatus} updatePaidDate={updatePaidDate} deleteInvoice={deleteInvoice} onPrint={setPrintTarget} clients={clients} addClient={addClient} />
+        ) : tab === "statements" ? (
+          <StatementsTab invoices={invoices} clients={clients} onPrint={setPrintTarget} />
+        ) : tab === "clients" ? (
+          <ClientsTab clients={clients} addClient={addClient} updateClient={updateClient} deleteClient={deleteClient} />
         ) : (
           <ReportsTab transactions={transactions} invoices={invoices} onPrint={setPrintTarget} />
         )}
@@ -560,6 +585,7 @@ function PrintDocument({ target, vatRegistered, vatRate, vatNumber }) {
       {target.type === "annualReport" && <AnnualReportDoc {...target.payload} />}
       {target.type === "invoice" && <InvoiceDoc {...target.payload} vatRegistered={vatRegistered} vatRate={vatRate} />}
       {target.type === "quote" && <QuoteDoc {...target.payload} vatRegistered={vatRegistered} vatRate={vatRate} />}
+      {target.type === "clientStatement" && <ClientStatementDoc {...target.payload} />}
       <LetterheadFooter pageLabel={`Generated ${fmtLongDate(todayISO())}`} />
     </div>
   );
@@ -629,7 +655,7 @@ function AnnualReportDoc({ year, transactions, monthlyData }) {
   return (
     <div>
       <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>Annual Financial Report</div>
-      <div style={{ fontSize: 12, color: COLORS.textMute, marginBottom: 16 }}>{year}</div>
+      <div style={{ fontSize: 12, color: COLORS.textMute, marginBottom: 16 }}>{`Mar ${year} – Feb ${year + 1}`}</div>
       <div style={{ display: "flex", gap: 30, marginBottom: 18 }}>
         <DocStat label="Total income" value={fmtMoney(income)} color={COLORS.green} />
         <DocStat label="Total expenses" value={fmtMoney(expense)} color={COLORS.rust} />
@@ -660,6 +686,46 @@ function AnnualReportDoc({ year, transactions, monthlyData }) {
       </table>
       <div className="ledger-serif" style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>All transactions</div>
       <DocTable rows={transactions} />
+    </div>
+  );
+}
+function ClientStatementDoc({ client, mode, year, month, rows, opening, closing }) {
+  const periodLabel = mode === "monthly" ? `${MONTH_NAMES[month]} ${year}` : `${year}`;
+  return (
+    <div>
+      <div className="ledger-serif" style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>Client Statement</div>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{client}</div>
+      <div style={{ fontSize: 12, color: COLORS.textMute, marginBottom: 16 }}>{periodLabel}</div>
+
+      <div style={{ display: "flex", gap: 30, marginBottom: 18 }}>
+        <DocStat label="Opening balance" value={fmtMoney(opening)} color={COLORS.textMain} />
+        <DocStat label="Closing balance" value={fmtMoney(closing)} color={closing >= 0 ? COLORS.rust : COLORS.green} />
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 18 }}>
+        <thead>
+          <tr style={{ borderBottom: `1px solid ${COLORS.line}` }}>
+            <th style={{ textAlign: "left", padding: "4px 6px", color: COLORS.textMute }}>Date</th>
+            <th style={{ textAlign: "left", padding: "4px 6px", color: COLORS.textMute }}>Description</th>
+            <th style={{ textAlign: "right", padding: "4px 6px", color: COLORS.textMute }}>Amount</th>
+            <th style={{ textAlign: "right", padding: "4px 6px", color: COLORS.textMute }}>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={4} style={{ padding: "10px 6px", color: COLORS.textMute }}>No activity in this period.</td></tr>
+          ) : rows.map((r, idx) => (
+            <tr key={idx} style={{ borderBottom: `1px solid ${COLORS.line}` }}>
+              <td style={{ padding: "4px 6px" }} className="ledger-mono">{r.date}</td>
+              <td style={{ padding: "4px 6px" }}>{r.label}</td>
+              <td style={{ padding: "4px 6px", textAlign: "right" }} className="ledger-mono">
+                {r.amount >= 0 ? "+" : "-"}{fmtMoney(Math.abs(r.amount))}
+              </td>
+              <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 600 }} className="ledger-mono">{fmtMoney(r.balance)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1222,7 +1288,7 @@ function Label({ children }) {
 }
 
 // ---------- Invoices Tab ----------
-function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, deleteInvoice, onPrint, clients, addClient }) {
+function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus, updatePaidDate, deleteInvoice, onPrint, clients, addClient }) {
   const [form, setForm] = useState({ client: "", project: "", issueDate: todayISO(), dueDate: todayISO(), status: "unpaid" });
   const [items, setItems] = useState([{ id: uid(), description: "", quantity: 1, unitPrice: "" }]);
     const [editingId, setEditingId] = useState(null);
@@ -1377,6 +1443,15 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
                         }}>
                           {i.status === "paid" ? "Paid" : isOverdue ? "Overdue" : "Unpaid"}
                         </span>
+                        {i.status === "paid" && (
+                          <input
+                            type="date"
+                            value={i.paidDate || ""}
+                            onChange={e => updatePaidDate(i.id, e.target.value)}
+                            className="ledger-input"
+                            style={{ ...inputStyle, marginTop: 4, padding: "2px 6px", fontSize: 11, width: 130 }}
+                          />
+                        )}
                       </td>
                       <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
                         <button onClick={() => onPrint({ type: "invoice", payload: { invoice: i } })} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Print</button>
@@ -1392,6 +1467,227 @@ function InvoicesTab({ invoices, addInvoice, updateInvoice, updateInvoiceStatus,
               </tbody>
             </table>
           </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+// ---------- Statements Tab ----------
+function StatementsTab({ clients, invoices, onPrint }) {
+  const [clientName, setClientName] = useState("");
+  const [mode, setMode] = useState("monthly");
+  const years = useMemo(() => {
+    const s = new Set(invoices.map(i => new Date(i.issueDate).getFullYear()));
+    s.add(new Date().getFullYear());
+    return [...s].sort((a, b) => b - a);
+  }, [invoices]);
+  const [year, setYear] = useState(years[0]);
+  const [month, setMonth] = useState(new Date().getMonth());
+
+  useEffect(() => { if (!years.includes(year)) setYear(years[0]); }, [years]);
+  useEffect(() => { if (!clientName && clients.length > 0) setClientName(clients[0].name); }, [clients]);
+
+  const clientInvoices = invoices.filter(i => i.client === clientName);
+
+  const periodStart = mode === "monthly" ? new Date(year, month, 1) : new Date(year, 0, 1);
+  const periodEnd = mode === "monthly" ? new Date(year, month + 1, 0, 23, 59, 59) : new Date(year, 11, 31, 23, 59, 59);
+
+  const events = [];
+  clientInvoices.forEach(i => {
+    events.push({ date: i.issueDate, label: `Invoice ${i.reference || ""}`.trim(), amount: Number(i.amount) });
+    if (i.status === "paid" && i.paidDate) {
+      events.push({ date: i.paidDate, label: `Payment received — ${i.reference || i.client}`, amount: -Number(i.amount) });
+    }
+  });
+  events.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const opening = events.filter(e => new Date(e.date) < periodStart).reduce((s, e) => s + e.amount, 0);
+  const periodEvents = events.filter(e => new Date(e.date) >= periodStart && new Date(e.date) <= periodEnd);
+  let running = opening;
+  const rows = periodEvents.map(e => { running += e.amount; return { ...e, balance: running }; });
+  const closing = running;
+
+  const outstanding = clientInvoices.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
+  const overdueTotal = clientInvoices.filter(i => i.status !== "paid" && new Date(i.dueDate) < new Date()).reduce((s, i) => s + Number(i.amount), 0);
+  const paidTotal = clientInvoices.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Card>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
+          <div style={{ minWidth: 200 }}>
+            <Label>Client</Label>
+            <select value={clientName} onChange={e => setClientName(e.target.value)} style={inputStyle}>
+              {clients.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label>Report</Label>
+            <select value={mode} onChange={e => setMode(e.target.value)} style={{ ...inputStyle, width: 150 }}>
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+          <div>
+            <Label>Year</Label>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ ...inputStyle, width: 110 }}>
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          {mode === "monthly" && (
+            <div>
+              <Label>Month</Label>
+              <select value={month} onChange={e => setMonth(Number(e.target.value))} style={{ ...inputStyle, width: 130 }}>
+                {MONTH_NAMES.map((m, idx) => <option key={m} value={idx}>{m}</option>)}
+              </select>
+            </div>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => onPrint({ type: "clientStatement", payload: { client: clientName, mode, year, month, rows, opening, closing } })}
+          >
+            Print / Save as PDF
+          </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>{clientName || "No clients yet"}</SectionTitle>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+          <StatBlock label="Paid to date" value={fmtMoney(paidTotal)} color={COLORS.green} />
+          <StatBlock label="Outstanding" value={fmtMoney(outstanding)} color={COLORS.brass} />
+          <StatBlock label="Overdue" value={fmtMoney(overdueTotal)} color={COLORS.rust} />
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle sub={mode === "monthly" ? `${MONTH_NAMES[month]} ${year}` : `${year}`}>Statement</SectionTitle>
+        <div style={{ fontSize: 13, marginBottom: 10 }}>
+          <span style={{ color: COLORS.textMute }}>Opening balance: </span>
+          <span className="ledger-mono" style={{ fontWeight: 600 }}>{fmtMoney(opening)}</span>
+        </div>
+        {rows.length === 0 ? (
+          <div style={{ color: COLORS.textMute, fontSize: 13 }}>No activity in this period.</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr className="ledger-row-line">
+                <th style={{ textAlign: "left", padding: "6px", color: COLORS.textMute, fontSize: 12 }}>Date</th>
+                <th style={{ textAlign: "left", padding: "6px", color: COLORS.textMute, fontSize: 12 }}>Description</th>
+                <th style={{ textAlign: "right", padding: "6px", color: COLORS.textMute, fontSize: 12 }}>Amount</th>
+                <th style={{ textAlign: "right", padding: "6px", color: COLORS.textMute, fontSize: 12 }}>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => (
+                <tr key={idx} className="ledger-row-line">
+                  <td style={{ padding: "6px" }} className="ledger-mono">{r.date}</td>
+                  <td style={{ padding: "6px" }}>{r.label}</td>
+                  <td style={{ padding: "6px", textAlign: "right", color: r.amount >= 0 ? COLORS.rust : COLORS.green }} className="ledger-mono">
+                    {r.amount >= 0 ? "+" : "-"}{fmtMoney(Math.abs(r.amount))}
+                  </td>
+                  <td style={{ padding: "6px", textAlign: "right", fontWeight: 600 }} className="ledger-mono">{fmtMoney(r.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div style={{ fontSize: 13, marginTop: 10, textAlign: "right" }}>
+          <span style={{ color: COLORS.textMute }}>Closing balance: </span>
+          <span className="ledger-mono" style={{ fontWeight: 700 }}>{fmtMoney(closing)}</span>
+        </div>
+      </Card>
+    </div>
+  );
+}
+// ---------- Clients Tab ----------
+function ClientsTab({ clients, addClient, updateClient, deleteClient }) {
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
+  const [showNew, setShowNew] = useState(false);
+
+  function startEdit(c) {
+    setEditingId(c.id);
+    setForm({ name: c.name || "", reg: c.reg || "", vat: c.vat || "", address: c.address || "", contact: c.contact || "", phone: c.phone || "", email: c.email || "" });
+    setShowNew(false);
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    setShowNew(false);
+    setForm({ name: "", reg: "", vat: "", address: "", contact: "", phone: "", email: "" });
+  }
+  function submit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    if (editingId) {
+      updateClient(editingId, form);
+    } else {
+      addClient(form);
+    }
+    cancelEdit();
+  }
+  function handleDelete(c) {
+    if (window.confirm(`Remove client "${c.name}"? This does not delete their invoices or quotes.`)) {
+      deleteClient(c.id);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showNew || editingId ? 14 : 0 }}>
+          <SectionTitle>{editingId ? "Edit client" : "Clients"}</SectionTitle>
+          {!showNew && !editingId && <Button onClick={() => setShowNew(true)}>+ New client</Button>}
+        </div>
+        {(showNew || editingId) && (
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <input className="ledger-input" type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inputStyle} placeholder="Client name" required autoFocus />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input className="ledger-input" type="text" value={form.reg} onChange={e => setForm({ ...form, reg: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Reg no." />
+              <input className="ledger-input" type="text" value={form.vat} onChange={e => setForm({ ...form, vat: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="VAT no." />
+            </div>
+            <input className="ledger-input" type="text" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} style={inputStyle} placeholder="Address" />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input className="ledger-input" type="text" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Contact person" />
+              <input className="ledger-input" type="text" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} style={{ ...inputStyle, flex: "1 1 140px" }} placeholder="Phone/Cell" />
+            </div>
+            <input className="ledger-input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={inputStyle} placeholder="Email" />
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Button type="submit">{editingId ? "Save changes" : "Add client"}</Button>
+              <button type="button" onClick={cancelEdit} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Cancel</button>
+            </div>
+          </form>
+        )}
+      </Card>
+
+      <Card>
+        <SectionTitle>All clients ({clients.length})</SectionTitle>
+        {clients.length === 0 ? (
+          <div style={{ color: COLORS.textMute, fontSize: 13 }}>No clients yet.</div>
+        ) : (
+          <table className="ledger-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr className="ledger-row-line">
+                {["Name", "Contact", "Phone", "Email", ""].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "6px", color: COLORS.textMute, fontWeight: 600, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map(c => (
+                <tr key={c.id} className="ledger-row-line">
+                  <td style={{ padding: "8px 6px", fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ padding: "8px 6px", color: COLORS.textMute }}>{c.contact || "—"}</td>
+                  <td style={{ padding: "8px 6px", color: COLORS.textMute }}>{c.phone || "—"}</td>
+                  <td style={{ padding: "8px 6px", color: COLORS.textMute }}>{c.email || "—"}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button onClick={() => startEdit(c)} style={{ background: "none", border: "none", color: COLORS.brass, cursor: "pointer", fontSize: 12, marginRight: 10 }}>Edit</button>
+                    <button onClick={() => handleDelete(c)} style={{ background: "none", border: "none", color: COLORS.textMute, cursor: "pointer", fontSize: 12 }}>Remove</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </Card>
     </div>
